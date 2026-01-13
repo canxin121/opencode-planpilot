@@ -1,0 +1,62 @@
+{
+  "name": "opencode-planpilot",
+  "version": "0.1.0",
+  "description": "Planpilot plugin for OpenCode (TypeScript rewrite)",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/canxin121/opencode-planpilot.git"
+  },
+  "homepage": "https://github.com/canxin121/opencode-planpilot",
+  "bugs": {
+    "url": "https://github.com/canxin121/opencode-planpilot/issues"
+  },
+  "packageManager": "bun@1.3.6",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": {
+    "planpilot": "src/cli.ts",
+    "opencode-planpilot": "src/cli.ts"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./cli": {
+      "import": "./src/cli.ts",
+      "types": "./src/cli.ts"
+    }
+  },
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint . --ext .ts",
+    "lint:fix": "eslint . --ext .ts --fix"
+  },
+  "dependencies": {
+    "xdg-basedir": "^5.1.0"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "*",
+    "@types/node": "^25.0.8",
+    "bun-types": "^1.3.6",
+    "eslint": "^9.39.2",
+    "@eslint/js": "^9.39.2",
+    "@typescript-eslint/eslint-plugin": "^8.53.0",
+    "@typescript-eslint/parser": "^8.53.0",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  },
+  "license": "MIT"
+}
