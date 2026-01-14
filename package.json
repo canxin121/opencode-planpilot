@@ -1,6 +1,6 @@
 {
   "name": "opencode-planpilot",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Planpilot plugin for OpenCode (TypeScript rewrite)",
   "type": "module",
   "repository": {
