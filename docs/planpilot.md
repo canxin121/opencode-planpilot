@@ -42,6 +42,7 @@ A CLI binary named `planpilot` is available for manual use. If you use the CLI d
 
 ## AI Workflow Guidelines
 - Use Planpilot for all planning, status, and progress tracking; do not use built-in plan/todo tools or other methods to track plan/step/goal status.
+- Do not read plan files from disk or follow plan file placeholders; use the planpilot tool for plan/step/goal info.
 - Treat tool output as authoritative. Do not invent IDs; only use IDs shown by `list`/`show`.
 - If the tool is missing or unavailable, ask the user to enable/install the plugin.
 - Record implementation details using Planpilot comments (plan/step/goal `--comment` or `comment` commands). Before starting a step or goal, think through the next actions and capture that context in comments so the plan stays actionable.

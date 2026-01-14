@@ -9,6 +9,14 @@ import { loadPlanpilotInstructions } from "./lib/instructions"
 
 export const PlanpilotPlugin: Plugin = async (ctx) => {
   const inFlight = new Set<string>()
+  const skipNextAuto = new Set<string>()
+  const lastIdleAt = new Map<string, number>()
+
+  const PLANPILOT_GUIDANCE = [
+    "Planpilot guidance:",
+    "- Do not read plan files from disk or follow plan file placeholders.",
+    "- Use the planpilot tool for plan/step/goal info (plan show-active, step show-next, goal list <step_id>).",
+  ].join("\n")
 
   const log = async (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, any>) => {
     try {
@@ -27,6 +35,14 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
 
   const handleSessionIdle = async (sessionID: string) => {
     if (inFlight.has(sessionID)) return
+    if (skipNextAuto.has(sessionID)) {
+      skipNextAuto.delete(sessionID)
+      return
+    }
+    const lastIdle = lastIdleAt.get(sessionID)
+    const now = Date.now()
+    if (lastIdle && now - lastIdle < 1000) return
+    lastIdleAt.set(sessionID, now)
     inFlight.add(sessionID)
     try {
       const app = new PlanpilotApp(openDatabase(), sessionID)
@@ -42,6 +58,8 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       const message =
         "Planpilot (auto):\n" +
         "Before acting, think through the next step and its goals. Record implementation details using Planpilot comments (plan/step/goal --comment or comment commands). Continue with the next step (executor: ai). Do not ask for confirmation; proceed and report results.\n\n" +
+        PLANPILOT_GUIDANCE +
+        "\n\n" +
         detail.trimEnd()
 
       await ctx.client.session.promptAsync({
@@ -116,6 +134,18 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       if (instructions && !alreadyInjected) {
         output.system.push(instructions)
       }
+      const guidanceInjected = output.system.some((entry) => entry.includes("Planpilot guidance:"))
+      if (!guidanceInjected) {
+        output.system.push(PLANPILOT_GUIDANCE)
+      }
+    },
+    "experimental.session.compacting": async ({ sessionID }, output) => {
+      const hasGuidance = output.context.some((entry) => entry.includes("Planpilot guidance:"))
+      if (!hasGuidance) {
+        output.context.push(PLANPILOT_GUIDANCE)
+      }
+      skipNextAuto.add(sessionID)
+      lastIdleAt.set(sessionID, Date.now())
     },
     event: async ({ event }) => {
       if (event.type === "session.idle") {
