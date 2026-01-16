@@ -16,6 +16,7 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
     "Planpilot guidance:",
     "- Do not read plan files from disk or follow plan file placeholders.",
     "- Use the planpilot tool for plan/step/goal info (plan show-active, step show-next, goal list <step_id>).",
+    "- If you cannot continue or need human input, insert a new step with executor `human` before the next pending step using planpilot so auto-continue pauses.",
   ].join("\n")
 
   const log = async (level: "debug" | "info" | "warn" | "error", message: string, extra?: Record<string, any>) => {
@@ -30,6 +31,86 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       })
     } catch {
       // ignore logging failures
+    }
+  }
+
+  type SessionMessage = {
+    info?: {
+      role?: string
+      agent?: string
+      model?: {
+        providerID: string
+        modelID: string
+      }
+      modelID?: string
+      providerID?: string
+      variant?: string
+      time?: {
+        created?: number
+      }
+      error?: {
+        name?: string
+      }
+      finish?: string
+    }
+  }
+
+  const loadRecentMessages = async (sessionID: string, limit = 200): Promise<SessionMessage[]> => {
+    const response = await ctx.client.session.messages({
+      path: { id: sessionID },
+      query: { limit },
+    })
+    const data = (response as { data?: unknown }).data ?? response
+    if (!Array.isArray(data)) return []
+    return data as SessionMessage[]
+  }
+
+  const findLastMessage = (messages: SessionMessage[], predicate: (message: SessionMessage) => boolean) => {
+    for (let idx = messages.length - 1; idx >= 0; idx -= 1) {
+      const message = messages[idx]
+      if (predicate(message)) return message
+    }
+    return undefined
+  }
+
+  const findLastMessageByRole = (messages: SessionMessage[], role: "user" | "assistant") =>
+    findLastMessage(messages, (message) => message?.info?.role === role)
+
+  const resolveAutoContext = async (sessionID: string) => {
+    const messages = await loadRecentMessages(sessionID)
+    if (!messages.length) return null
+
+    const sortedMessages = [...messages].sort((left, right) => {
+      const leftTime = left?.info?.time?.created ?? 0
+      const rightTime = right?.info?.time?.created ?? 0
+      return leftTime - rightTime
+    })
+
+    const lastUser = findLastMessage(sortedMessages, (message) => message?.info?.role === "user")
+    if (!lastUser) return { missingUser: true }
+
+    const lastAssistant = findLastMessageByRole(sortedMessages, "assistant")
+    const error = lastAssistant?.info?.error
+    const aborted = typeof error === "object" && error?.name === "MessageAbortedError"
+    const finish = lastAssistant?.info?.finish
+    const ready =
+      !lastAssistant || (typeof finish === "string" && finish !== "tool-calls" && finish !== "unknown")
+
+    const model =
+      lastUser?.info?.model ??
+      (lastUser?.info?.providerID && lastUser?.info?.modelID
+        ? { providerID: lastUser.info.providerID, modelID: lastUser.info.modelID }
+        : lastAssistant?.info?.providerID && lastAssistant?.info?.modelID
+          ? { providerID: lastAssistant.info.providerID, modelID: lastAssistant.info.modelID }
+          : undefined)
+
+    return {
+      agent: lastUser?.info?.agent ?? lastAssistant?.info?.agent,
+      model,
+      variant: lastUser?.info?.variant,
+      aborted,
+      ready,
+      missingUser: false,
     }
   }
 
@@ -55,6 +136,13 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       const detail = formatStepDetail(next, goals)
       if (!detail.trim()) return
 
+      const autoContext = await resolveAutoContext(sessionID)
+      if (autoContext?.missingUser) {
+        await log("warn", "auto-continue stopped: missing user context", { sessionID })
+        return
+      }
+      if (autoContext?.aborted || autoContext?.ready === false) return
+
       const message =
         "Planpilot (auto):\n" +
         "Before acting, think through the next step and its goals. Record implementation details using Planpilot comments (plan/step/goal --comment or comment commands). Continue with the next step (executor: ai). Do not ask for confirmation; proceed and report results.\n\n" +
@@ -62,11 +150,18 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
         "\n\n" +
         detail.trimEnd()
 
+      const promptBody: any = {
+        agent: autoContext?.agent ?? undefined,
+        model: autoContext?.model ?? undefined,
+        parts: [{ type: "text" as const, text: message }],
+      }
+      if (autoContext?.variant) {
+        promptBody.variant = autoContext.variant
+      }
+
       await ctx.client.session.promptAsync({
         path: { id: sessionID },
-        body: {
-          parts: [{ type: "text", text: message }],
-        },
+        body: promptBody,
       })
     } catch (err) {
       await log("warn", "failed to auto-continue plan", { error: err instanceof Error ? err.message : String(err) })
