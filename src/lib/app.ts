@@ -22,7 +22,15 @@ import {
   type StepRow,
   type StepStatus,
 } from "./models"
-import { ensureNonEmpty, joinIds, normalizeCommentEntries, uniqueIds } from "./util"
+import {
+  ensureNonEmpty,
+  joinIds,
+  normalizeCommentEntries,
+  parseWaitFromComment,
+  removeWaitFromComment,
+  uniqueIds,
+  upsertWaitInComment,
+} from "./util"
 import { invalidInput, notFound } from "./errors"
 import { formatStepDetail } from "./format"
 
@@ -818,6 +826,44 @@ export class PlanpilotApp {
     })
 
     return tx()
+  }
+
+  setStepWait(stepId: number, delayMs: number, reason?: string): { step: StepRow; until: number } {
+    if (!Number.isFinite(delayMs) || delayMs < 0) {
+      throw invalidInput("delay must be a non-negative number")
+    }
+    const tx = this.db.transaction(() => {
+      const step = this.getStep(stepId)
+      const now = Date.now()
+      const until = now + Math.trunc(delayMs)
+      const comment = upsertWaitInComment(step.comment, until, reason)
+      this.db.prepare("UPDATE steps SET comment = ?, updated_at = ? WHERE id = ?").run(comment, now, stepId)
+      const updated = this.getStep(stepId)
+      this.touchPlan(updated.plan_id)
+      return { step: updated, until }
+    })
+
+    return tx()
+  }
+
+  clearStepWait(stepId: number): { step: StepRow } {
+    const tx = this.db.transaction(() => {
+      const step = this.getStep(stepId)
+      const comment = step.comment ? removeWaitFromComment(step.comment) : null
+      const now = Date.now()
+      this.db.prepare("UPDATE steps SET comment = ?, updated_at = ? WHERE id = ?").run(comment, now, stepId)
+      const updated = this.getStep(stepId)
+      this.touchPlan(updated.plan_id)
+      return { step: updated }
+    })
+
+    return tx()
+  }
+
+  getStepWait(stepId: number): { step: StepRow; wait: { until: number; reason?: string } | null } {
+    const step = this.getStep(stepId)
+    const wait = parseWaitFromComment(step.comment)
+    return { step, wait }
   }
 
   commentGoals(entries: Array<[number, string]>): number[] {

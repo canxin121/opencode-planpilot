@@ -212,6 +212,8 @@ async function handleStep(app: PlanpilotApp, subcommand: string | undefined, arg
       return { planIds: handleStepShow(app, args), shouldSync: false }
     case "show-next":
       return { planIds: handleStepShowNext(app), shouldSync: false }
+    case "wait":
+      return { planIds: handleStepWait(app, args), shouldSync: true }
     case "comment":
       return { planIds: handleStepComment(app, args), shouldSync: true }
     case "update":
@@ -700,6 +702,30 @@ function handleStepShowNext(app: PlanpilotApp): number[] {
   return []
 }
 
+function handleStepWait(app: PlanpilotApp, args: string[]): number[] {
+  if (!args.length) {
+    throw invalidInput("step wait requires <id>")
+  }
+  const stepId = parseNumber(args[0], "step id")
+  const options = parseOptions(args.slice(1)).options
+  if (options.clear) {
+    const result = app.clearStepWait(stepId)
+    log(`Step ID: ${result.step.id} wait cleared.`)
+    return [result.step.plan_id]
+  }
+  if (options.delay === undefined) {
+    throw invalidInput("step wait requires --delay <ms> or --clear")
+  }
+  const delayMs = parseNumber(options.delay, "delay")
+  if (delayMs < 0) {
+    throw invalidInput("delay must be >= 0")
+  }
+  const reason = options.reason ? String(options.reason) : undefined
+  const result = app.setStepWait(stepId, delayMs, reason)
+  log(`Step ID: ${result.step.id} waiting until ${result.until}.`)
+  return [result.step.plan_id]
+}
+
 function handleStepUpdate(app: PlanpilotApp, args: string[]): number[] {
   if (!args.length) {
     throw invalidInput("step update requires <id>")
@@ -1034,18 +1060,31 @@ function parseOptions(args: string[]) {
         options.order = expectValue(args, i, token)
         i += 2
         break
-      case "--to":
-        options.to = expectValue(args, i, token)
-        i += 2
-        break
-      case "--goal":
-        if (!options.goals) options.goals = []
-        options.goals.push(expectValue(args, i, token))
-        i += 2
-        break
-      default:
-        throw invalidInput(`unexpected argument: ${token}`)
-    }
+    case "--to":
+      options.to = expectValue(args, i, token)
+      i += 2
+      break
+    case "--delay":
+      options.delay = expectValue(args, i, token)
+      i += 2
+      break
+    case "--reason":
+      options.reason = expectValue(args, i, token)
+      i += 2
+      break
+    case "--clear":
+      options.clear = true
+      i += 1
+      break
+    case "--goal":
+      if (!options.goals) options.goals = []
+      options.goals.push(expectValue(args, i, token))
+      i += 2
+      break
+    default:
+      throw invalidInput(`unexpected argument: ${token}`)
+  }
+
   }
   return { options, positionals }
 }

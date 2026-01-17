@@ -6,16 +6,27 @@ import { openDatabase } from "./lib/db"
 import { invalidInput } from "./lib/errors"
 import { formatStepDetail } from "./lib/format"
 import { loadPlanpilotInstructions } from "./lib/instructions"
+import { parseWaitFromComment } from "./lib/util"
 
 export const PlanpilotPlugin: Plugin = async (ctx) => {
   const inFlight = new Set<string>()
   const skipNextAuto = new Set<string>()
   const lastIdleAt = new Map<string, number>()
+  const waitTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
+  const clearWaitTimer = (sessionID: string) => {
+    const existing = waitTimers.get(sessionID)
+    if (existing) {
+      clearTimeout(existing)
+      waitTimers.delete(sessionID)
+    }
+  }
 
   const PLANPILOT_GUIDANCE = [
     "Planpilot guidance:",
     "- Do not read plan files from disk or follow plan file placeholders.",
     "- Use the planpilot tool for plan/step/goal info (plan show-active, step show-next, goal list <step_id>).",
+    "- When waiting on external systems, use `step wait <id> --delay <ms> --reason <text>` to pause auto-continue.",
     "- If you cannot continue or need human input, insert a new step with executor `human` before the next pending step using planpilot so auto-continue pauses.",
   ].join("\n")
 
@@ -132,6 +143,32 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       const next = app.nextStep(active.plan_id)
       if (!next) return
       if (next.executor !== "ai") return
+      const wait = parseWaitFromComment(next.comment)
+      if (wait && wait.until > now) {
+        clearWaitTimer(sessionID)
+        await log("info", "auto-continue delayed by step wait", {
+          sessionID,
+          stepId: next.id,
+          until: wait.until,
+          reason: wait.reason,
+        })
+        const msUntil = Math.max(0, wait.until - now)
+        const timer = setTimeout(() => {
+          waitTimers.delete(sessionID)
+          handleSessionIdle(sessionID).catch((err) => {
+            void log("warn", "auto-continue retry failed", {
+              sessionID,
+              error: err instanceof Error ? err.message : String(err),
+            })
+          })
+        }, msUntil)
+        waitTimers.set(sessionID, timer)
+        return
+      }
+      if (!wait) {
+        clearWaitTimer(sessionID)
+      }
+
       const goals = app.goalsForStep(next.id)
       const detail = formatStepDetail(next, goals)
       if (!detail.trim()) return
@@ -149,6 +186,7 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
         PLANPILOT_GUIDANCE +
         "\n\n" +
         detail.trimEnd()
+
 
       const promptBody: any = {
         agent: autoContext?.agent ?? undefined,

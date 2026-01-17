@@ -43,6 +43,7 @@ A CLI binary named `planpilot` is available for manual use. If you use the CLI d
 ## AI Workflow Guidelines
 - Use Planpilot for all planning, status, and progress tracking; do not use built-in plan/todo tools or other methods to track plan/step/goal status.
 - Do not read plan files from disk or follow plan file placeholders; use the planpilot tool for plan/step/goal info.
+- When waiting for external systems, use `step wait <id> --delay <ms> --reason <text>` to pause auto-continue until the delay expires.
 - Treat tool output as authoritative. Do not invent IDs; only use IDs shown by `list`/`show`.
 - If the tool is missing or unavailable, ask the user to enable/install the plugin.
 - Record implementation details using Planpilot comments (plan/step/goal `--comment` or `comment` commands). Before starting a step or goal, think through the next actions and capture that context in comments so the plan stays actionable.
@@ -69,6 +70,7 @@ A CLI binary named `planpilot` is available for manual use. If you use the CLI d
 - The plugin listens to `session.idle` / `session.status` (idle) events.
 - If there is an active plan and the next pending step is assigned to `ai`, it appends a `Planpilot (auto):` message to the prompt and submits it so the model continues the plan.
 - It does nothing when there is no active plan or when the next step is assigned to `human`.
+- If the next step has a wait marker (`@wait-until=<unix_ms>` in its comment) and the time has not elapsed, auto-continue is skipped.
 
 ## ID Notes
 - Plan/step/goal IDs are database IDs and may be non-contiguous or not start at 1; always use the actual IDs shown by `list`/`show`.
@@ -169,6 +171,10 @@ A CLI binary named `planpilot` is available for manual use. If you use the CLI d
   - Output: lists all goals with `[status]` and goal id.
 - `step show-next`: show the next pending step for the active plan (same format as `step show`).
   - Output (empty): `No active plan.` or `No pending step.`.
+- `step wait <id> --delay <ms> [--reason <text>]`: delay auto-continue for this step by a number of milliseconds.
+  - Output: `Step ID: <id> waiting until <unix_ms>.`
+- `step wait <id> --clear`: clear any existing wait on this step.
+  - Output: `Step ID: <id> wait cleared.`
 - `step update <id> [--content <content>] [--status todo|done] [--executor ai|human] [--comment <comment>]`: update fields; `--status done` is allowed only when all goals are done or the step has no goals.
   - Output: `Updated step ID: <id>.`.
   - Errors: `Error: Invalid input: cannot mark step done; next pending goal: <content> (id <id>)`.

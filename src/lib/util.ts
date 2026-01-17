@@ -49,6 +49,60 @@ export function normalizeCommentEntries(entries: Array<[number, string]>): Array
   return ordered
 }
 
+const WAIT_UNTIL_PREFIX = "@wait-until="
+const WAIT_REASON_PREFIX = "@wait-reason="
+
+export type WaitComment = {
+  until: number
+  reason?: string
+}
+
+export function parseWaitFromComment(comment?: string | null): WaitComment | null {
+  if (!comment) return null
+  let until: number | null = null
+  let reason: string | undefined
+  for (const line of comment.split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith(WAIT_UNTIL_PREFIX)) {
+      const raw = trimmed.slice(WAIT_UNTIL_PREFIX.length).trim()
+      const value = Number(raw)
+      if (Number.isFinite(value)) {
+        until = value
+      }
+      continue
+    }
+    if (trimmed.startsWith(WAIT_REASON_PREFIX)) {
+      const raw = trimmed.slice(WAIT_REASON_PREFIX.length).trim()
+      if (raw) reason = raw
+    }
+  }
+  if (until === null) return null
+  return { until, reason }
+}
+
+function isWaitLine(line: string): boolean {
+  const trimmed = line.trim()
+  return trimmed.startsWith(WAIT_UNTIL_PREFIX) || trimmed.startsWith(WAIT_REASON_PREFIX)
+}
+
+export function upsertWaitInComment(comment: string | null, until: number, reason?: string): string {
+  const lines = comment ? comment.split(/\r?\n/) : []
+  const filtered = lines.filter((line) => !isWaitLine(line))
+  const waitLines = [`${WAIT_UNTIL_PREFIX}${Math.trunc(until)}`]
+  const reasonValue = reason?.trim()
+  if (reasonValue) {
+    waitLines.push(`${WAIT_REASON_PREFIX}${reasonValue}`)
+  }
+  return [...waitLines, ...filtered].join("\n").trimEnd()
+}
+
+export function removeWaitFromComment(comment?: string | null): string | null {
+  if (!comment) return null
+  const lines = comment.split(/\r?\n/).filter((line) => !isWaitLine(line))
+  const cleaned = lines.join("\n").trimEnd()
+  return cleaned.length ? cleaned : null
+}
+
 export function resolveMaybeRealpath(value: string): string {
   try {
     return fs.realpathSync.native(value)
