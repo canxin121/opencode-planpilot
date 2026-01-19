@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import fs from "fs"
 import { openDatabase, resolvePlanMarkdownPath, ensureParentDir } from "./lib/db"
 import { PlanpilotApp } from "./lib/app"
@@ -15,36 +14,29 @@ import { AppError, invalidInput } from "./lib/errors"
 import { ensureNonEmpty, projectMatchesPath, resolveMaybeRealpath } from "./lib/util"
 import { formatGoalDetail, formatPlanDetail, formatPlanMarkdown, formatStepDetail } from "./lib/format"
 
-const CWD_FLAG = "--cwd"
-const SESSION_ID_FLAG = "--session-id"
 const DEFAULT_PAGE = 1
 const DEFAULT_LIMIT = 20
 
-export type CliIO = {
+export type CommandIO = {
   log: (...args: any[]) => void
-  error: (...args: any[]) => void
 }
 
-const defaultIO: CliIO = {
-  log: (...args) => {
-    console.log(...args)
-  },
-  error: (...args) => {
-    console.error(...args)
-  },
+export type CommandContext = {
+  sessionId: string
+  cwd: string
 }
 
-let currentIO: CliIO = defaultIO
+const noopIO: CommandIO = {
+  log: () => {},
+}
+
+let currentIO: CommandIO = noopIO
 
 function log(...args: any[]) {
   currentIO.log(...args)
 }
 
-function error(...args: any[]) {
-  currentIO.error(...args)
-}
-
-async function withIO<T>(io: CliIO, fn: () => Promise<T> | T): Promise<T> {
+async function withIO<T>(io: CommandIO, fn: () => Promise<T> | T): Promise<T> {
   const prev = currentIO
   currentIO = io
   try {
@@ -54,7 +46,7 @@ async function withIO<T>(io: CliIO, fn: () => Promise<T> | T): Promise<T> {
   }
 }
 
-export function formatCliError(err: unknown): string {
+export function formatCommandError(err: unknown): string {
   if (err instanceof AppError) {
     return `Error: ${err.toDisplayString()}`
   }
@@ -64,28 +56,24 @@ export function formatCliError(err: unknown): string {
   return `Error: ${String(err)}`
 }
 
-export async function runCLI(argv: string[] = process.argv.slice(2), io: CliIO = defaultIO) {
+export async function runCommand(argv: string[], context: CommandContext, io: CommandIO = noopIO) {
   return withIO(io, async () => {
-    const { cwd, cwdFlagPresent, sessionId, remaining } = parseGlobalArgs(argv)
-
-    if (!remaining.length) {
-      throw invalidInput("missing command")
+    if (!argv.length) {
+      throw invalidInput("missing argv")
     }
 
-    const [section, subcommand, ...args] = remaining
-
-  const resolvedSessionId = resolveSessionId(sessionId)
+    const [section, subcommand, ...args] = argv
 
     const db = openDatabase()
-    const resolvedCwd = cwd ? resolveMaybeRealpath(cwd) : undefined
-    const app = new PlanpilotApp(db, resolvedSessionId, resolvedCwd)
+    const resolvedCwd = resolveMaybeRealpath(context.cwd)
+    const app = new PlanpilotApp(db, context.sessionId, resolvedCwd)
 
     let planIds: number[] = []
     let shouldSync = false
 
     switch (section) {
       case "plan": {
-        const result = await handlePlan(app, subcommand, args, { cwd, cwdFlagPresent })
+        const result = await handlePlan(app, subcommand, args, { cwd: context.cwd })
         planIds = result.planIds
         shouldSync = result.shouldSync
         break
@@ -112,57 +100,20 @@ export async function runCLI(argv: string[] = process.argv.slice(2), io: CliIO =
   })
 }
 
-function parseGlobalArgs(argv: string[]) {
-  let cwd: string | undefined
-  let sessionId: string | undefined
-  let cwdFlagPresent = false
-  const remaining: string[] = []
-
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i]
-    if (token === CWD_FLAG) {
-      cwdFlagPresent = true
-      cwd = argv[i + 1]
-      i += 1
-      continue
-    }
-    if (token === SESSION_ID_FLAG) {
-      sessionId = argv[i + 1]
-      i += 1
-      continue
-    }
-    remaining.push(token)
-  }
-
-  return { cwd, cwdFlagPresent, sessionId, remaining }
-}
-
-function resolveSessionId(sessionId: string | undefined): string {
-  if (!sessionId) {
-    throw invalidInput(`${SESSION_ID_FLAG} is required`)
-  }
-  const trimmed = sessionId.trim()
-  if (!trimmed) {
-    throw invalidInput(`${SESSION_ID_FLAG} is empty`)
-  }
-  return trimmed
-}
-
-function requireCwd(cwdFlagPresent: boolean, cwd: string | undefined): string {
-  if (!cwdFlagPresent) {
-    throw invalidInput(`${CWD_FLAG} is required`)
-  }
+function requireCwd(cwd: string | undefined): string {
   if (!cwd || !cwd.trim()) {
-    throw invalidInput(`${CWD_FLAG} is empty`)
+    throw invalidInput("cwd is required")
   }
   return cwd
 }
+
+export type { CommandContext as PlanpilotCommandContext, CommandIO as PlanpilotCommandIO }
 
 async function handlePlan(
   app: PlanpilotApp,
   subcommand: string | undefined,
   args: string[],
-  context: { cwd: string | undefined; cwdFlagPresent: boolean },
+  context: { cwd: string | undefined },
 ) {
   switch (subcommand) {
     case "add":
@@ -289,7 +240,7 @@ function handlePlanAddTree(app: PlanpilotApp, args: string[]): number[] {
 function handlePlanList(
   app: PlanpilotApp,
   args: string[],
-  context: { cwd: string | undefined; cwdFlagPresent: boolean },
+  context: { cwd: string | undefined },
 ): number[] {
   const { options, positionals } = parseOptions(args)
   if (positionals.length) {
@@ -306,7 +257,7 @@ function handlePlanList(
   }
 
   const desiredStatus: PlanStatus | null = parsePlanStatusFilter(options.status)
-  const cwd = requireCwd(context.cwdFlagPresent, context.cwd)
+  const cwd = requireCwd(context.cwd)
 
   const order = options.order ? parsePlanOrder(options.order) : "updated"
   const desc = options.desc ?? true
@@ -348,7 +299,7 @@ function handlePlanList(
 function handlePlanCount(
   app: PlanpilotApp,
   args: string[],
-  context: { cwd: string | undefined; cwdFlagPresent: boolean },
+  context: { cwd: string | undefined },
 ): number[] {
   const { options, positionals } = parseOptions(args)
   if (positionals.length) {
@@ -365,7 +316,7 @@ function handlePlanCount(
   }
 
   const desiredStatus: PlanStatus | null = parsePlanStatusFilter(options.status)
-  const cwd = requireCwd(context.cwdFlagPresent, context.cwd)
+  const cwd = requireCwd(context.cwd)
 
   let plans = app.listPlans()
   if (!plans.length) {
@@ -385,7 +336,7 @@ function handlePlanCount(
 function handlePlanSearch(
   app: PlanpilotApp,
   args: string[],
-  context: { cwd: string | undefined; cwdFlagPresent: boolean },
+  context: { cwd: string | undefined },
 ): number[] {
   const { options, positionals } = parseOptions(args)
   if (positionals.length) {
@@ -395,7 +346,7 @@ function handlePlanSearch(
     throw invalidInput("plan search requires at least one --search")
   }
   const desiredStatus: PlanStatus | null = parsePlanStatusFilter(options.status)
-  const cwd = requireCwd(context.cwdFlagPresent, context.cwd)
+  const cwd = requireCwd(context.cwd)
 
   const order = options.order ? parsePlanOrder(options.order) : "updated"
   const desc = options.desc ?? true
@@ -1514,9 +1465,3 @@ function syncPlanMarkdown(app: PlanpilotApp, planIds: number[]) {
   })
 }
 
-if (import.meta.main) {
-  runCLI(process.argv.slice(2), defaultIO).catch((err) => {
-    error(formatCliError(err))
-    process.exit(1)
-  })
-}
