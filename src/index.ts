@@ -5,56 +5,7 @@ import { openDatabase } from "./lib/db"
 import { invalidInput } from "./lib/errors"
 import { formatStepDetail } from "./lib/format"
 import { parseWaitFromComment } from "./lib/util"
-
-const PLANPILOT_TOOL_DESCRIPTION = [
-  "Planpilot planner for plan workflows.",
-  "Hints: 1. Model is plan/step/goal with ai/human executors and status auto-propagation upward (goals -> steps -> plan). 2. Keep comments short and decision-focused. 3. Add human steps only when AI cannot act. 4. Use `step wait` when ending a reply while waiting on external tasks.",
-  "",
-  "Usage:",
-  "- argv is tokenized: [section, subcommand, ...args]",
-  "- section: plan | step | goal",
-  "",
-  "Plan commands:",
-  "- plan add <title> <content>",
-  "- plan add-tree <title> <content> --step <content> [--executor ai|human] [--goal <content>]... [--step ...]...",
-  "- plan list [--scope project|all] [--status todo|done|all] [--limit N] [--page N] [--order id|title|created|updated] [--desc]",
-  "- plan count [--scope project|all] [--status todo|done|all]",
-  "- plan search --search <term> [--search <term> ...] [--search-mode any|all] [--search-field plan|title|content|comment|steps|goals|all] [--match-case] [--scope project|all] [--status todo|done|all] [--limit N] [--page N] [--order id|title|created|updated] [--desc]",
-  "- plan show <id>",
-  "- plan export <id> <path>",
-  "- plan comment <id> <comment> [<id> <comment> ...]",
-  "- plan update <id> [--title <title>] [--content <content>] [--status todo|done] [--comment <comment>]",
-  "- plan done <id>",
-  "- plan remove <id>",
-  "- plan activate <id> [--force]",
-  "- plan show-active",
-  "- plan deactivate",
-  "",
-  "Step commands:",
-  "- step add <plan_id> <content...> [--executor ai|human] [--at <pos>]",
-  "- step add-tree <plan_id> <content> [--executor ai|human] [--goal <content> ...]",
-  "- step list <plan_id> [--status todo|done|all] [--executor ai|human] [--limit N] [--page N]",
-  "- step count <plan_id> [--status todo|done|all] [--executor ai|human]",
-  "- step show <id>",
-  "- step show-next",
-  "- step wait <id> --delay <ms> [--reason <text>]",
-  "- step wait <id> --clear",
-  "- step comment <id> <comment> [<id> <comment> ...]",
-  "- step update <id> [--content <content>] [--status todo|done] [--executor ai|human] [--comment <comment>]",
-  "- step done <id> [--all-goals]",
-  "- step move <id> --to <pos>",
-  "- step remove <id...>",
-  "",
-  "Goal commands:",
-  "- goal add <step_id> <content...>",
-  "- goal list <step_id> [--status todo|done|all] [--limit N] [--page N]",
-  "- goal count <step_id> [--status todo|done|all]",
-  "- goal show <id>",
-  "- goal comment <id> <comment> [<id> <comment> ...]",
-  "- goal update <id> [--content <content>] [--status todo|done] [--comment <comment>]",
-  "- goal done <id...>",
-  "- goal remove <id...>",
-].join("\n")
+import { PLANPILOT_SYSTEM_INJECTION, PLANPILOT_TOOL_DESCRIPTION, formatPlanpilotAutoContinueMessage } from "./prompt"
 
 export const PlanpilotPlugin: Plugin = async (ctx) => {
   const inFlight = new Set<string>()
@@ -221,12 +172,10 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       if (autoContext?.aborted || autoContext?.ready === false) return
 
       const timestamp = new Date().toISOString()
-      const message = `Planpilot plugin auto message @ ${timestamp}
-Hints:
-- If the next step needs human action, insert a human step before it.
-- If you need to wait for something to finish, use the step wait subcommand.
-Next step details:
-${detail.trimEnd()}`
+      const message = formatPlanpilotAutoContinueMessage({
+        timestamp,
+        stepDetail: detail,
+      })
 
       const promptBody: any = {
         agent: autoContext?.agent ?? undefined,
@@ -249,6 +198,9 @@ ${detail.trimEnd()}`
   }
 
   return {
+    "experimental.chat.system.transform": async (_input, output) => {
+      output.system.push(PLANPILOT_SYSTEM_INJECTION)
+    },
     tool: {
       planpilot: tool({
         description: PLANPILOT_TOOL_DESCRIPTION,
@@ -285,9 +237,12 @@ ${detail.trimEnd()}`
         },
       }),
     },
-    "experimental.session.compacting": async ({ sessionID }) => {
+    "experimental.session.compacting": async ({ sessionID }, output) => {
       skipNextAuto.add(sessionID)
       lastIdleAt.set(sessionID, Date.now())
+
+      // Compaction runs with tools disabled; inject Planpilot guidance into the continuation summary.
+      output.context.push(PLANPILOT_TOOL_DESCRIPTION)
     },
     event: async ({ event }) => {
       if (event.type === "session.idle") {
@@ -310,4 +265,3 @@ function containsForbiddenFlags(argv: string[]): boolean {
     return false
   })
 }
-

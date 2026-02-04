@@ -13,6 +13,7 @@ import {
 import { AppError, invalidInput } from "./lib/errors"
 import { ensureNonEmpty, projectMatchesPath, resolveMaybeRealpath } from "./lib/util"
 import { formatGoalDetail, formatPlanDetail, formatPlanMarkdown, formatStepDetail } from "./lib/format"
+import { PLANPILOT_HELP_TEXT } from "./prompt"
 
 const DEFAULT_PAGE = 1
 const DEFAULT_LIMIT = 20
@@ -72,6 +73,14 @@ export async function runCommand(argv: string[], context: CommandContext, io: Co
     let shouldSync = false
 
     switch (section) {
+      case "help": {
+        if (subcommand !== undefined || args.length) {
+          const rest = [subcommand, ...args].filter((x) => x !== undefined)
+          throw invalidInput(`help unexpected argument: ${rest.join(" ")}`)
+        }
+        log(PLANPILOT_HELP_TEXT)
+        return
+      }
       case "plan": {
         const result = await handlePlan(app, subcommand, args, { cwd: context.cwd })
         planIds = result.planIds
@@ -234,6 +243,11 @@ function handlePlanAddTree(app: PlanpilotApp, args: string[]): number[] {
   log(`Created plan ID: ${result.plan.id}: ${result.plan.title} (steps: ${result.stepCount}, goals: ${result.goalCount})`)
   app.setActivePlan(result.plan.id, false)
   log(`Active plan set to ${result.plan.id}: ${result.plan.title}`)
+
+  // Print full detail so the AI can reference plan/step/goal IDs immediately.
+  const detail = app.getPlanDetail(result.plan.id)
+  log("")
+  log(formatPlanDetail(detail.plan, detail.steps, detail.goals))
   return [result.plan.id]
 }
 
@@ -1464,4 +1478,3 @@ function syncPlanMarkdown(app: PlanpilotApp, planIds: number[]) {
     fs.writeFileSync(mdPath, markdown, "utf8")
   })
 }
-
