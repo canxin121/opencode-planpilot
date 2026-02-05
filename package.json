@@ -1,6 +1,6 @@
 {
   "name": "opencode-planpilot",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Planpilot plugin for OpenCode",
   "type": "module",
   "repository": {
