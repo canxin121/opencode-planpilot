@@ -125,8 +125,6 @@ async function handlePlan(
   context: { cwd: string | undefined },
 ) {
   switch (subcommand) {
-    case "add":
-      return { planIds: handlePlanAdd(app, args), shouldSync: true }
     case "add-tree":
       return { planIds: handlePlanAddTree(app, args), shouldSync: true }
     case "list":
@@ -210,17 +208,6 @@ async function handleGoal(app: PlanpilotApp, subcommand: string | undefined, arg
     default:
       throw invalidInput(`unknown goal command: ${subcommand ?? ""}`)
   }
-}
-
-function handlePlanAdd(app: PlanpilotApp, args: string[]): number[] {
-  const [title, content] = args
-  if (!title || content === undefined) {
-    throw invalidInput("plan add requires <title> <content>")
-  }
-  ensureNonEmpty("plan content", content)
-  const plan = app.addPlan({ title, content })
-  log(`Created plan ID: ${plan.id}: ${plan.title}`)
-  return [plan.id]
 }
 
 function handlePlanAddTree(app: PlanpilotApp, args: string[]): number[] {

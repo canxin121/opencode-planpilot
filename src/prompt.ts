@@ -42,7 +42,6 @@ export const PLANPILOT_HELP_TEXT = [
   "- help",
   "",
   "Plan:",
-  "- plan add <title> <content>",
   "- plan add-tree <title> <content> --step <content> [--executor ai|human] [--goal <content>]... [--step ...]...",
   "- plan list [--scope project|all] [--status todo|done|all] [--limit N] [--page N] [--order id|title|created|updated] [--desc]",
   "- plan count [--scope project|all] [--status todo|done|all]",

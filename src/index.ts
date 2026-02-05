@@ -297,6 +297,10 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       await ctx.client.session.promptAsync({
         path: { id: sessionID },
         body: promptBody,
+        // OpenCode server routes requests to the correct instance (project) using this header.
+        // Without it, the server falls back to process.cwd(), which breaks when OpenCode is
+        // managed by opencode-studio (cwd != active project directory).
+        headers: ctx.directory ? { "x-opencode-directory": ctx.directory } : undefined,
       })
 
       await log("info", "auto-continue prompt_async accepted", {
