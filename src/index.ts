@@ -12,6 +12,7 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
   const skipNextAuto = new Set<string>()
   const lastIdleAt = new Map<string, number>()
   const waitTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const runSeq = new Map<string, number>()
 
   const clearWaitTimer = (sessionID: string) => {
     const existing = waitTimers.get(sessionID)
@@ -34,6 +35,16 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
     } catch {
       // ignore logging failures
     }
+  }
+
+  const logDebug = async (message: string, extra?: Record<string, any>) => {
+    await log("debug", message, extra)
+  }
+
+  const nextRun = (sessionID: string) => {
+    const next = (runSeq.get(sessionID) ?? 0) + 1
+    runSeq.set(sessionID, next)
+    return next
   }
 
   type SessionMessage = {
@@ -113,32 +124,76 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       aborted,
       ready,
       missingUser: false,
+      assistantFinish: finish,
+      assistantErrorName: typeof error === "object" && error ? (error as any).name : undefined,
     }
   }
 
-  const handleSessionIdle = async (sessionID: string) => {
-    if (inFlight.has(sessionID)) return
-    if (skipNextAuto.has(sessionID)) {
-      skipNextAuto.delete(sessionID)
+  const handleSessionIdle = async (sessionID: string, source: string) => {
+    const now = Date.now()
+    const run = nextRun(sessionID)
+
+    if (inFlight.has(sessionID)) {
+      await logDebug("auto-continue skipped: already in-flight", { sessionID, source, run })
       return
     }
-    const lastIdle = lastIdleAt.get(sessionID)
-    const now = Date.now()
-    if (lastIdle && now - lastIdle < 1000) return
-    lastIdleAt.set(sessionID, now)
     inFlight.add(sessionID)
     try {
+      if (skipNextAuto.has(sessionID)) {
+        skipNextAuto.delete(sessionID)
+        await logDebug("auto-continue skipped: skipNextAuto", { sessionID, source, run })
+        return
+      }
+
+      const lastIdle = lastIdleAt.get(sessionID)
+      if (lastIdle && now - lastIdle < 1000) {
+        await logDebug("auto-continue skipped: idle debounce", {
+          sessionID,
+          source,
+          run,
+          lastIdle,
+          now,
+          deltaMs: now - lastIdle,
+        })
+        return
+      }
+
+      lastIdleAt.set(sessionID, now)
+
       const app = new PlanpilotApp(openDatabase(), sessionID)
       const active = app.getActivePlan()
-      if (!active) return
+      if (!active) {
+        clearWaitTimer(sessionID)
+        await logDebug("auto-continue skipped: no active plan", { sessionID, source, run })
+        return
+      }
       const next = app.nextStep(active.plan_id)
-      if (!next) return
-      if (next.executor !== "ai") return
+      if (!next) {
+        clearWaitTimer(sessionID)
+        await logDebug("auto-continue skipped: no pending step", { sessionID, source, run, planId: active.plan_id })
+        return
+      }
+      if (next.executor !== "ai") {
+        clearWaitTimer(sessionID)
+        await logDebug("auto-continue skipped: next executor is not ai", {
+          sessionID,
+          source,
+          run,
+          planId: active.plan_id,
+          stepId: next.id,
+          executor: next.executor,
+        })
+        return
+      }
+
       const wait = parseWaitFromComment(next.comment)
       if (wait && wait.until > now) {
         clearWaitTimer(sessionID)
         await log("info", "auto-continue delayed by step wait", {
           sessionID,
+          source,
+          run,
+          planId: active.plan_id,
           stepId: next.id,
           until: wait.until,
           reason: wait.reason,
@@ -146,7 +201,7 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
         const msUntil = Math.max(0, wait.until - now)
         const timer = setTimeout(() => {
           waitTimers.delete(sessionID)
-          handleSessionIdle(sessionID).catch((err) => {
+          handleSessionIdle(sessionID, "wait_timer").catch((err) => {
             void log("warn", "auto-continue retry failed", {
               sessionID,
               error: err instanceof Error ? err.message : String(err),
@@ -162,14 +217,55 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
 
       const goals = app.goalsForStep(next.id)
       const detail = formatStepDetail(next, goals)
-      if (!detail.trim()) return
+      if (!detail.trim()) {
+        await log("warn", "auto-continue stopped: empty step detail", {
+          sessionID,
+          source,
+          run,
+          planId: active.plan_id,
+          stepId: next.id,
+        })
+        return
+      }
 
       const autoContext = await resolveAutoContext(sessionID)
       if (autoContext?.missingUser) {
         await log("warn", "auto-continue stopped: missing user context", { sessionID })
         return
       }
-      if (autoContext?.aborted || autoContext?.ready === false) return
+      if (!autoContext) {
+        await logDebug("auto-continue stopped: missing autoContext (no recent messages?)", {
+          sessionID,
+          source,
+          run,
+          planId: active.plan_id,
+          stepId: next.id,
+        })
+        return
+      }
+      if (autoContext.aborted) {
+        await logDebug("auto-continue skipped: last assistant aborted", {
+          sessionID,
+          source,
+          run,
+          planId: active.plan_id,
+          stepId: next.id,
+          assistantErrorName: autoContext.assistantErrorName,
+          assistantFinish: autoContext.assistantFinish,
+        })
+        return
+      }
+      if (autoContext.ready === false) {
+        await logDebug("auto-continue skipped: last assistant not ready", {
+          sessionID,
+          source,
+          run,
+          planId: active.plan_id,
+          stepId: next.id,
+          assistantFinish: autoContext.assistantFinish,
+        })
+        return
+      }
 
       const timestamp = new Date().toISOString()
       const message = formatPlanpilotAutoContinueMessage({
@@ -186,16 +282,46 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
         promptBody.variant = autoContext.variant
       }
 
+      await logDebug("auto-continue sending prompt_async", {
+        sessionID,
+        source,
+        run,
+        planId: active.plan_id,
+        stepId: next.id,
+        agent: promptBody.agent,
+        model: promptBody.model,
+        variant: promptBody.variant,
+        messageChars: message.length,
+      })
+
       await ctx.client.session.promptAsync({
         path: { id: sessionID },
         body: promptBody,
       })
+
+      await log("info", "auto-continue prompt_async accepted", {
+        sessionID,
+        source,
+        run,
+        planId: active.plan_id,
+        stepId: next.id,
+      })
     } catch (err) {
-      await log("warn", "failed to auto-continue plan", { error: err instanceof Error ? err.message : String(err) })
+      await log("warn", "failed to auto-continue plan", {
+        sessionID,
+        source,
+        error: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      })
     } finally {
       inFlight.delete(sessionID)
     }
   }
+
+  await log("info", "planpilot plugin initialized", {
+    directory: ctx.directory,
+    worktree: ctx.worktree,
+  })
 
   return {
     "experimental.chat.system.transform": async (_input, output) => {
@@ -241,16 +367,18 @@ export const PlanpilotPlugin: Plugin = async (ctx) => {
       skipNextAuto.add(sessionID)
       lastIdleAt.set(sessionID, Date.now())
 
+      await logDebug("compaction hook: skip next auto-continue", { sessionID })
+
       // Compaction runs with tools disabled; inject Planpilot guidance into the continuation summary.
       output.context.push(PLANPILOT_TOOL_DESCRIPTION)
     },
     event: async ({ event }) => {
       if (event.type === "session.idle") {
-        await handleSessionIdle(event.properties.sessionID)
+        await handleSessionIdle(event.properties.sessionID, "session.idle")
         return
       }
       if (event.type === "session.status" && event.properties.status.type === "idle") {
-        await handleSessionIdle(event.properties.sessionID)
+        await handleSessionIdle(event.properties.sessionID, "session.status")
       }
     },
   }
