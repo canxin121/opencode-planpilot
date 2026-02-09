@@ -91,11 +91,17 @@ export const PLANPILOT_TOOL_DESCRIPTION = [
 export const PLANPILOT_SYSTEM_INJECTION =
   "If the task is multi-step or complex, must use the `planpilot` plan tool. For full usage + rules, run: planpilot help."
 
-export function formatPlanpilotAutoContinueMessage(input: { timestamp: string; stepDetail: string }): string {
+export function formatPlanpilotAutoContinueMessage(input: {
+  timestamp: string
+  stepDetail: string
+  triggerDetail?: string
+}): string {
   const detail = (input.stepDetail ?? "").trimEnd()
+  const trigger = (input.triggerDetail ?? "").trim()
   return [
     `Planpilot @ ${input.timestamp}`,
     "This message was automatically sent by the Planpilot tool because the next pending step executor is ai.",
+    ...(trigger ? [`Trigger context: ${trigger}`] : []),
     "For full usage + rules, run: planpilot help",
     "Next step details:",
     detail,
