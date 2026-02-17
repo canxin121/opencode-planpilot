@@ -41,8 +41,13 @@ export type AutoContinueConfig = {
   onQuestionRejected: EventRule
 }
 
+export type RuntimeConfig = {
+  paused: boolean
+}
+
 export type PlanpilotConfig = {
   autoContinue: AutoContinueConfig
+  runtime: RuntimeConfig
 }
 
 export type LoadedPlanpilotConfig = {
@@ -103,6 +108,9 @@ export const DEFAULT_PLANPILOT_CONFIG: PlanpilotConfig = {
       force: true,
     },
   },
+  runtime: {
+    paused: false,
+  },
 }
 
 export function resolvePlanpilotConfigPath(): string {
@@ -153,8 +161,92 @@ type RawAutoContinueConfig = {
   onQuestionRejected?: RawEventRule
 }
 
+type RawRuntimeConfig = {
+  paused?: unknown
+}
+
 type RawPlanpilotConfig = {
   autoContinue?: RawAutoContinueConfig
+  runtime?: RawRuntimeConfig
+}
+
+function cloneDefaultConfig(): PlanpilotConfig {
+  return {
+    autoContinue: {
+      sendRetry: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.sendRetry.enabled,
+        maxAttempts: DEFAULT_PLANPILOT_CONFIG.autoContinue.sendRetry.maxAttempts,
+        delaysMs: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.sendRetry.delaysMs],
+      },
+      onSessionError: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.keywords.matchCase,
+        },
+        errorNames: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.errorNames],
+        statusCodes: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.statusCodes],
+        retryableOnly: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionError.retryableOnly,
+      },
+      onSessionRetry: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.keywords.matchCase,
+        },
+        attemptAtLeast: DEFAULT_PLANPILOT_CONFIG.autoContinue.onSessionRetry.attemptAtLeast,
+      },
+      onPermissionAsked: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionAsked.keywords.matchCase,
+        },
+      },
+      onPermissionRejected: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onPermissionRejected.keywords.matchCase,
+        },
+      },
+      onQuestionAsked: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionAsked.keywords.matchCase,
+        },
+      },
+      onQuestionRejected: {
+        enabled: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.enabled,
+        force: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.force,
+        keywords: {
+          any: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.keywords.any],
+          all: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.keywords.all],
+          none: [...DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.keywords.none],
+          matchCase: DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected.keywords.matchCase,
+        },
+      },
+    },
+    runtime: {
+      paused: DEFAULT_PLANPILOT_CONFIG.runtime.paused,
+    },
+  }
 }
 
 function parseBoolean(value: unknown, fallback: boolean): boolean {
@@ -270,6 +362,29 @@ function parseConfig(raw: RawPlanpilotConfig): PlanpilotConfig {
         DEFAULT_PLANPILOT_CONFIG.autoContinue.onQuestionRejected,
       ),
     },
+    runtime: {
+      paused: parseBoolean(raw.runtime?.paused, DEFAULT_PLANPILOT_CONFIG.runtime.paused),
+    },
+  }
+}
+
+export function normalizePlanpilotConfig(raw: unknown): PlanpilotConfig {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return cloneDefaultConfig()
+  }
+  return parseConfig(raw as RawPlanpilotConfig)
+}
+
+export function savePlanpilotConfig(config: PlanpilotConfig): LoadedPlanpilotConfig {
+  const filePath = resolvePlanpilotConfigPath()
+  const normalized = normalizePlanpilotConfig(config)
+  const parentDir = path.dirname(filePath)
+  fs.mkdirSync(parentDir, { recursive: true })
+  fs.writeFileSync(filePath, `${JSON.stringify(normalized, null, 2)}\n`, "utf8")
+  return {
+    path: filePath,
+    loadedFromFile: true,
+    config: normalized,
   }
 }
 
@@ -280,22 +395,22 @@ export function loadPlanpilotConfig(): LoadedPlanpilotConfig {
       return {
         path: filePath,
         loadedFromFile: false,
-        config: DEFAULT_PLANPILOT_CONFIG,
+        config: cloneDefaultConfig(),
       }
     }
     const text = fs.readFileSync(filePath, "utf8")
-    const parsed = JSON.parse(text) as RawPlanpilotConfig
+    const parsed = JSON.parse(text) as unknown
     return {
       path: filePath,
       loadedFromFile: true,
-      config: parseConfig(parsed),
+      config: normalizePlanpilotConfig(parsed),
     }
   } catch (error) {
     const loadError = error instanceof Error ? error.message : String(error)
     return {
       path: filePath,
       loadedFromFile: false,
-      config: DEFAULT_PLANPILOT_CONFIG,
+      config: cloneDefaultConfig(),
       loadError,
     }
   }

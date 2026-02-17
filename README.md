@@ -21,6 +21,26 @@ Add to `opencode.json`:
 
 OpenCode installs npm plugins automatically at startup.
 
+## Studio Integration
+
+- Studio manifest is generated at `dist/studio.manifest.json`.
+- Bridge entrypoint is generated at `dist/studio-bridge.js` and is invoked by the manifest.
+- Web mount assets are generated under `dist/studio-web/`.
+
+The Studio bridge accepts JSON on stdin and returns a JSON envelope on stdout (`{ ok, data | error }`).
+
+Key actions:
+
+- `config.get`, `config.set`
+- `runtime.snapshot`, `runtime.next`, `runtime.pause`, `runtime.resume`
+- `plan.*`, `step.*`, `goal.*` (including `plan.createTree` / `plan.addTree`)
+- `events.poll` for change cursors + event envelopes
+
+Studio UI integration includes:
+
+- `chat.sidebar` mount for runtime + next-step context
+- `settings.panel` capability backed by plugin settings schema
+
 ## Auto-Continue Config
 
 `session.idle` and `session.status=idle` are always auto-continue triggers and cannot be disabled.
