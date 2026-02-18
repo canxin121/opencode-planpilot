@@ -5,26 +5,29 @@ import packageJson from "./package.json"
 
 const keywordRuleSchema = {
   title: "Keywords",
-  description: "Match rules for deciding whether to trigger.",
+  description: "Match rules against the event summary text.",
   type: "object",
   properties: {
     any: {
       title: "Any",
-      description: "Trigger when any keyword matches (empty = no requirement).",
+      description:
+        "Trigger when any keyword matches the event summary text. Leave empty to ignore.",
       type: "array",
       items: { type: "string" },
       default: [],
     },
     all: {
       title: "All",
-      description: "Trigger only when all keywords match (empty = no requirement).",
+      description:
+        "Trigger only when all keywords match the event summary text. Leave empty to ignore.",
       type: "array",
       items: { type: "string" },
       default: [],
     },
     none: {
       title: "None",
-      description: "Do not trigger when any of these keywords match.",
+      description:
+        "Do not trigger if any keyword matches the event summary text.",
       type: "array",
       items: { type: "string" },
       default: [],
@@ -59,6 +62,8 @@ const eventRuleSchema = {
   additionalProperties: false,
 }
 
+const studioWebEntry = "studio-web/planpilot-todo-bar.js"
+
 const studioManifest = {
   studioApiVersion: 1,
   id: "opencode-planpilot",
@@ -67,6 +72,19 @@ const studioManifest = {
   bridge: {
     command: ["bun", "dist/studio-bridge.js"],
   },
+  ui: {
+    mode: "module",
+    assetsDir: "dist",
+    entry: studioWebEntry,
+  },
+  mounts: [
+    {
+      surface: "chat.overlay.bottom",
+      title: "Planpilot",
+      entry: studioWebEntry,
+      mode: "module",
+    },
+  ],
   capabilities: ["settings.panel", "events.poll"],
   events: {
     pollIntervalMs: 1200,
@@ -74,14 +92,28 @@ const studioManifest = {
   settingsSchema: {
     type: "object",
     properties: {
+      runtime: {
+        title: "Runtime",
+        description: "Operational switches for Planpilot.",
+        type: "object",
+        properties: {
+          paused: {
+            title: "Paused",
+            description: "Pause auto-continue in this OpenCode instance.",
+            type: "boolean",
+            default: false,
+          },
+        },
+        additionalProperties: false,
+      },
       autoContinue: {
         title: "Auto continue",
         description: "Rules for automatically continuing when the session becomes idle.",
         type: "object",
         properties: {
           sendRetry: {
-            title: "Send retry",
-            description: "Retry auto-continue sends that fail transiently.",
+            title: "Retry failed sends",
+            description: "Retry auto-continue sends that fail (e.g. transient errors).",
             type: "object",
             properties: {
               enabled: {
@@ -109,7 +141,7 @@ const studioManifest = {
           },
           onSessionError: {
             title: "On session error",
-            description: "Trigger when a session reports an error.",
+            description: "Trigger when the session errors.",
             type: "object",
             properties: {
               enabled: {
@@ -150,7 +182,7 @@ const studioManifest = {
           },
           onSessionRetry: {
             title: "On session retry",
-            description: "Trigger when the session enters retry state.",
+            description: "Trigger when the session retries.",
             type: "object",
             properties: {
               enabled: {
@@ -178,12 +210,12 @@ const studioManifest = {
           },
           onPermissionAsked: {
             title: "On permission asked",
-            description: "Trigger when the assistant asks for permission.",
+            description: "Trigger when a permission is requested.",
             ...eventRuleSchema,
           },
           onPermissionRejected: {
             title: "On permission rejected",
-            description: "Trigger after a permission request is rejected.",
+            description: "Trigger when a permission request is rejected.",
             ...eventRuleSchema,
             properties: {
               enabled: {
@@ -203,12 +235,12 @@ const studioManifest = {
           },
           onQuestionAsked: {
             title: "On question asked",
-            description: "Trigger when the assistant asks a question.",
+            description: "Trigger when a question is asked.",
             ...eventRuleSchema,
           },
           onQuestionRejected: {
             title: "On question rejected",
-            description: "Trigger after a question is rejected.",
+            description: "Trigger when a question is rejected.",
             ...eventRuleSchema,
             properties: {
               enabled: {
@@ -241,18 +273,11 @@ async function writeStudioManifest() {
   await fs.writeFile(manifestPath, `${JSON.stringify(studioManifest, null, 2)}\n`, "utf8")
 }
 
-async function removeLegacyStudioWebAssets() {
-  // Planpilot used to ship a standalone panel UI under dist/studio-web.
-  // Ensure legacy build artifacts are removed even if the output cleaner
-  // doesn't delete empty directories.
-  const legacyDir = path.resolve("dist/studio-web")
-  await fs.rm(legacyDir, { recursive: true, force: true }).catch(() => {})
-}
-
 export default defineConfig({
   entry: {
     index: "src/index.ts",
     "studio-bridge": "src/studio/bridge.ts",
+    "studio-web/planpilot-todo-bar": "src/studio-web/planpilot-todo-bar.ts",
   },
   format: ["esm"],
   dts: true,
@@ -262,6 +287,5 @@ export default defineConfig({
   external: ["bun:sqlite", "xdg-basedir", "@opencode-ai/plugin"],
   onSuccess: async () => {
     await writeStudioManifest()
-    await removeLegacyStudioWebAssets()
   },
 })
