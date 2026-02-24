@@ -23,6 +23,7 @@ export type StudioMountOptions = {
   context: Record<string, string>
   host: HostApi
   layout?: LayoutApi
+  close?: () => void
 }
 
 type PlanStatus = "todo" | "done"
@@ -86,6 +87,82 @@ type State = {
   runtime: RuntimeSnapshot | null
   activePlanDetail: PlanDetail | null
   sessionPlans: PlanRow[]
+}
+
+type UiLocale = "en-US" | "zh-CN"
+
+type UiStrings = {
+  viewingSuffix: string
+  loading: string
+  noPlans: string
+  checkingPlanStatus: string
+  noPlansFoundForSession: string
+  noSelectedPlanHint: string
+  planDetailUnavailable: string
+  showPlan: string
+  noPlansInSession: string
+  active: string
+  noStepsYet: string
+  waiting: string
+  paused: string
+  updating: string
+  refresh: string
+  planList: string
+  close: string
+  collapse: string
+  error: string
+}
+
+const UI_STRINGS: Record<UiLocale, UiStrings> = {
+  "en-US": {
+    viewingSuffix: "(viewing)",
+    loading: "Loading...",
+    noPlans: "No plans",
+    checkingPlanStatus: "Checking plan status...",
+    noPlansFoundForSession: "No plans found for this session yet.",
+    noSelectedPlanHint: "No plan is selected right now. Open Plan List to review a recent plan.",
+    planDetailUnavailable: "Plan detail is unavailable",
+    showPlan: "Show plan",
+    noPlansInSession: "No plans in this session.",
+    active: "Active",
+    noStepsYet: "This plan has no steps yet.",
+    waiting: "Waiting",
+    paused: "Paused",
+    updating: "Updating...",
+    refresh: "Refresh",
+    planList: "Plan List",
+    close: "Close",
+    collapse: "Collapse",
+    error: "Error",
+  },
+  "zh-CN": {
+    viewingSuffix: "(查看中)",
+    loading: "加载中...",
+    noPlans: "暂无计划",
+    checkingPlanStatus: "正在检查计划状态...",
+    noPlansFoundForSession: "此会话中还没有计划。",
+    noSelectedPlanHint: "当前未选择计划。打开计划列表查看最近的计划。",
+    planDetailUnavailable: "计划详情不可用",
+    showPlan: "显示计划",
+    noPlansInSession: "此会话中暂无计划。",
+    active: "进行中",
+    noStepsYet: "该计划还没有步骤。",
+    waiting: "等待中",
+    paused: "已暂停",
+    updating: "更新中...",
+    refresh: "刷新",
+    planList: "计划列表",
+    close: "关闭",
+    collapse: "收起",
+    error: "错误",
+  },
+}
+
+function normalizeLocale(value: string | undefined | null): UiLocale {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (!normalized) return "en-US"
+  if (normalized.startsWith("zh")) return "zh-CN"
+  return "en-US"
 }
 
 function asObject(value: JsonValue | undefined | null): Record<string, JsonValue> {
@@ -208,12 +285,12 @@ function parsePlanDetail(value: JsonValue): PlanDetail | null {
   return { plan, steps, goals }
 }
 
-function formattedWait(stepDetail: RuntimeStepDetail | null): string {
+function formattedWait(stepDetail: RuntimeStepDetail | null, locale: UiLocale): string {
   const wait = stepDetail?.wait
   if (!wait?.until) return ""
   const when = new Date(wait.until)
   if (Number.isNaN(when.getTime())) return ""
-  const time = when.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  const time = when.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })
   return wait.reason ? `${time} (${wait.reason})` : time
 }
 
@@ -251,6 +328,9 @@ function iconSvg(name: string, className: string): string {
   if (name === "hide") {
     return `<svg ${common}><path d="M3 3l18 18"/><path d="M10.58 10.58A3 3 0 0 0 12 15a3 3 0 0 0 2.42-4.42"/><path d="M9.88 5.09A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a18 18 0 0 1-3.2 4.2"/><path d="M6.1 6.1A18.5 18.5 0 0 0 2 12s3 7 10 7a10.7 10.7 0 0 0 3.1-.4"/></svg>`
   }
+  if (name === "x") {
+    return `<svg ${common}><path d="m6 6 12 12"/><path d="m18 6-12 12"/></svg>`
+  }
   if (name === "clock") {
     return `<svg ${common}><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`
   }
@@ -262,6 +342,9 @@ function iconSvg(name: string, className: string): string {
 
 export function mount(el: HTMLElement, opts: StudioMountOptions) {
   const sessionId = String(opts.context?.sessionId || "").trim()
+  const locale = normalizeLocale(opts.context?.locale || opts.context?.lang)
+  const t = UI_STRINGS[locale]
+  const hostManagedMode = opts.context?.studioOverlayMode === "host-menu"
 
   const state: State = {
     sessionId,
@@ -269,7 +352,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
     busy: false,
     error: null,
     showOtherPlans: false,
-    collapsed: true,
+    collapsed: !hostManagedMode,
     viewedPlanId: 0,
     goalsExpandedByStepId: {},
     runtime: null,
@@ -369,10 +452,10 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
     if (plan) return `#${plan.id} ${plan.title}`
     if (state.activePlanDetail?.plan) {
       const p = state.activePlanDetail.plan
-      return `#${p.id} ${p.title} (viewing)`
+      return `#${p.id} ${p.title} ${t.viewingSuffix}`
     }
-    if (state.loading) return "Loading..."
-    return "No plans"
+    if (state.loading) return t.loading
+    return t.noPlans
   }
 
   function planContent(): string {
@@ -381,12 +464,12 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
   }
 
   function fallbackStatusMessage(): string {
-    if (state.loading && !state.activePlanDetail) return "Checking plan status..."
+    if (state.loading && !state.activePlanDetail) return t.checkingPlanStatus
     if (!state.activePlanDetail) {
       if (state.sessionPlans.length === 0) {
-        return "No plans found for this session yet."
+        return t.noPlansFoundForSession
       }
-      return "No plan is selected right now. Open Plan List to review a recent plan."
+      return t.noSelectedPlanHint
     }
     return ""
   }
@@ -474,6 +557,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
   }
 
   function toggleCollapsed() {
+    if (hostManagedMode) return
     state.collapsed = !state.collapsed
     if (state.collapsed) {
       state.showOtherPlans = false
@@ -494,7 +578,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
       state.showOtherPlans = false
       const detailRaw = await invoke("plan.get", { id: planId } as unknown as JsonValue)
       const detail = parsePlanDetail(detailRaw)
-      if (!detail) throw new Error("Plan detail is unavailable")
+      if (!detail) throw new Error(t.planDetailUnavailable)
       state.viewedPlanId = planId
       state.activePlanDetail = detail
     } catch (error) {
@@ -513,8 +597,8 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
           type="button"
           data-pp-action="toggle"
           class="h-9 w-9 rounded-full shadow-md border border-border/50 bg-background/80 backdrop-blur hover:bg-background transition-all inline-flex items-center justify-center"
-          aria-label="Show plan"
-          title="Show plan"
+          aria-label="${t.showPlan}"
+          title="${t.showPlan}"
           ${state.busy ? "disabled" : ""}
         >
           ${iconSvg("list", "h-5 w-5 text-muted-foreground")}
@@ -525,7 +609,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
 
   function renderPlanList(): string {
     if (state.sessionPlans.length === 0) {
-      return `<div class="px-2 py-2 text-center text-xs text-muted-foreground">No plans in this session.</div>`
+      return `<div class="px-2 py-2 text-center text-xs text-muted-foreground">${t.noPlansInSession}</div>`
     }
 
     const activeId = activePlanId()
@@ -536,7 +620,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
         const isRuntimeActive = plan.id === runtimeActiveId
         const title = summarizePlanContent(plan.content) || `#${plan.id} ${plan.title}`
         const badge = isRuntimeActive
-          ? '<span class="shrink-0 text-[10px] px-1 rounded bg-emerald-500/15 text-emerald-700">Active</span>'
+          ? `<span class="shrink-0 text-[10px] px-1 rounded bg-emerald-500/15 text-emerald-700">${t.active}</span>`
           : ""
         const statusIcon =
           plan.status === "done"
@@ -569,7 +653,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
   function renderSteps(detail: PlanDetail): string {
     const steps = orderedSteps(detail)
     if (!steps.length) {
-      return `<div class="py-2 text-center text-xs text-muted-foreground italic leading-relaxed">This plan has no steps yet.</div>`
+      return `<div class="py-2 text-center text-xs text-muted-foreground italic leading-relaxed">${t.noStepsYet}</div>`
     }
 
     const runtimeNextStepId =
@@ -583,7 +667,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
             return a.id - b.id
           })[0]?.id ?? 0
     const nextStepId = runtimeNextStepId || derivedNextStepId
-    const nextWaitLabel = runtimeNextStepId ? formattedWait(state.runtime?.nextStep ?? null) : ""
+    const nextWaitLabel = runtimeNextStepId ? formattedWait(state.runtime?.nextStep ?? null, locale) : ""
 
     const items = steps
       .map((step) => {
@@ -597,7 +681,7 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
 
         const waitIcon =
           isNext && nextWaitLabel
-            ? `<span title="Waiting: ${htmlEscape(nextWaitLabel)}" aria-label="Waiting">${iconSvg(
+            ? `<span title="${htmlEscape(`${t.waiting}: ${nextWaitLabel}`)}" aria-label="${t.waiting}">${iconSvg(
                 "clock",
                 "h-4 w-4 text-amber-600/70",
               )}</span>`
@@ -693,13 +777,13 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
                       )}">${htmlEscape(content)}</div>`
                     : ""
                 }
-                ${paused ? `<div class="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground"><span class="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">Paused</span></div>` : ""}
+                ${paused ? `<div class="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground"><span class="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">${t.paused}</span></div>` : ""}
                 ${renderSteps(detail)}
               </div>
             `
 
     const errorBlock = state.error
-      ? `<div class="rounded bg-destructive/10 px-2 py-1.5 text-xs text-destructive flex items-start gap-2"><span class="font-bold">Error:</span> ${htmlEscape(
+      ? `<div class="rounded bg-destructive/10 px-2 py-1.5 text-xs text-destructive flex items-start gap-2"><span class="font-bold">${t.error}:</span> ${htmlEscape(
           state.error,
         )}</div>`
       : ""
@@ -711,15 +795,15 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
             headerLabel(),
           )}">${htmlEscape(headerLabel())}</span>
           ${detail && detail.plan.status === "done" ? iconSvg("check", "h-3.5 w-3.5 shrink-0 text-emerald-700/70") : ""}
-          ${state.loading ? '<span class="animate-pulse text-[10px] text-muted-foreground">Updating...</span>' : ""}
+          ${state.loading ? `<span class="animate-pulse text-[10px] text-muted-foreground">${t.updating}</span>` : ""}
         </div>
         <div class="flex items-center gap-0.5">
           <button
             type="button"
             data-pp-action="refresh"
             class="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-muted/40"
-            title="Refresh"
-            aria-label="Refresh"
+            title="${t.refresh}"
+            aria-label="${t.refresh}"
             ${state.busy ? "disabled" : ""}
           >
             ${iconSvg("refresh", "h-3.5 w-3.5 text-muted-foreground/70")}
@@ -728,22 +812,35 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
             type="button"
             data-pp-action="toggleList"
             class="h-7 w-7 inline-flex items-center justify-center rounded ${state.showOtherPlans ? "bg-muted/40" : "hover:bg-muted/40"}"
-            title="Plan List"
-            aria-label="Plan List"
+            title="${t.planList}"
+            aria-label="${t.planList}"
             aria-pressed="${state.showOtherPlans}"
           >
             ${iconSvg("list", "h-3.5 w-3.5")}
           </button>
-          <div class="mx-1 h-3 w-px bg-border/50"></div>
+          ${
+            hostManagedMode
+              ? `<div class="mx-1 h-3 w-px bg-border/50"></div>
+          <button
+            type="button"
+            data-pp-action="close"
+            class="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-muted/40"
+            title="${t.close}"
+            aria-label="${t.close}"
+          >
+            ${iconSvg("x", "h-3.5 w-3.5 text-muted-foreground/70")}
+          </button>`
+              : `<div class="mx-1 h-3 w-px bg-border/50"></div>
           <button
             type="button"
             data-pp-action="toggle"
             class="h-7 w-7 inline-flex items-center justify-center rounded hover:bg-muted/40"
-            title="Collapse"
-            aria-label="Collapse"
+            title="${t.collapse}"
+            aria-label="${t.collapse}"
           >
             ${iconSvg("hide", "h-3.5 w-3.5 text-muted-foreground/70")}
-          </button>
+          </button>`
+          }
         </div>
       </div>
     `
@@ -766,8 +863,9 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
       return
     }
 
-    const body = state.collapsed ? renderCollapsedButton() : renderExpandedPanel()
-    el.innerHTML = `<div class="pointer-events-none w-full flex justify-end">${body}</div>`
+    const body = hostManagedMode ? renderExpandedPanel() : state.collapsed ? renderCollapsedButton() : renderExpandedPanel()
+    const containerClass = hostManagedMode ? "pointer-events-none w-full" : "pointer-events-none w-full flex justify-end"
+    el.innerHTML = `<div class="${containerClass}">${body}</div>`
   }
 
   function handleClick(event: MouseEvent) {
@@ -789,6 +887,10 @@ export function mount(el: HTMLElement, opts: StudioMountOptions) {
       }
       if (action === "refresh") {
         scheduleRefresh(0)
+        return
+      }
+      if (action === "close") {
+        opts.close?.()
         return
       }
       return

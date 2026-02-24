@@ -64,6 +64,98 @@ const eventRuleSchema = {
 
 const studioWebEntry = "studio-web/planpilot-todo-bar.js"
 
+const zhCnText: Record<string, string> = {
+  Planpilot: "计划领航",
+  Keywords: "关键词",
+  "Match rules against the event summary text.": "根据事件摘要文本匹配规则。",
+  Any: "任意",
+  "Trigger when any keyword matches the event summary text. Leave empty to ignore.":
+    "当任意关键词匹配事件摘要文本时触发。留空则忽略。",
+  All: "全部",
+  "Trigger only when all keywords match the event summary text. Leave empty to ignore.":
+    "仅当所有关键词都匹配事件摘要文本时触发。留空则忽略。",
+  None: "无",
+  "Do not trigger if any keyword matches the event summary text.": "如果任意关键词匹配事件摘要文本则不触发。",
+  "Match case": "区分大小写",
+  "Use case-sensitive matching.": "使用区分大小写匹配。",
+  Enabled: "启用",
+  "Enable this trigger.": "启用此触发器。",
+  Force: "强制",
+  "Force auto-continue even when a guard would normally block it.":
+    "即使守卫通常会阻止，也强制自动继续。",
+  Runtime: "运行时",
+  "Operational switches for Planpilot.": "Planpilot 的运行开关。",
+  Paused: "已暂停",
+  "Pause auto-continue in this OpenCode instance.": "在此 OpenCode 实例中暂停自动继续。",
+  "Auto continue": "自动继续",
+  "Rules for automatically continuing when the session becomes idle.": "会话空闲时自动继续的规则。",
+  "Retry failed sends": "重试发送失败",
+  "Retry auto-continue sends that fail (e.g. transient errors).":
+    "重试失败的自动继续发送（例如瞬时错误）。",
+  "Enable retries for failed auto-continue sends.": "为失败的自动继续发送启用重试。",
+  "Max attempts": "最大尝试次数",
+  "Maximum number of retry attempts.": "重试尝试的最大次数。",
+  "Delays (ms)": "延迟（毫秒）",
+  "Retry delays in milliseconds.": "以毫秒为单位的重试延迟。",
+  "On session error": "会话错误时",
+  "Trigger when the session errors.": "当会话报错时触发。",
+  "Enable auto-continue triggers on session errors.": "在会话错误时启用自动继续触发。",
+  "Force auto-continue when this trigger matches.": "当此触发器匹配时强制自动继续。",
+  "Error names": "错误名称",
+  "Optional list of error.name values to match.": "要匹配的 error.name 可选列表。",
+  "Status codes": "状态码",
+  "Optional list of HTTP status codes to match.": "要匹配的 HTTP 状态码可选列表。",
+  "Retryable only": "仅可重试",
+  "Only trigger when the error is marked retryable.": "仅在错误被标记为可重试时触发。",
+  "On session retry": "会话重试时",
+  "Trigger when the session retries.": "当会话重试时触发。",
+  "Enable auto-continue triggers on session retry.": "在会话重试时启用自动继续触发。",
+  "Attempt at least": "最少尝试次数",
+  "Only trigger when retry attempt is at least this value.": "仅当重试次数至少达到该值时触发。",
+  "On permission asked": "请求权限时",
+  "Trigger when a permission is requested.": "请求权限时触发。",
+  "On permission rejected": "权限被拒绝时",
+  "Trigger when a permission request is rejected.": "权限请求被拒绝时触发。",
+  "On question asked": "提出问题时",
+  "Trigger when a question is asked.": "提出问题时触发。",
+  "On question rejected": "问题被拒绝时",
+  "Trigger when a question is rejected.": "问题被拒绝时触发。",
+}
+
+function toZhCn(text: string): string {
+  return zhCnText[text] ?? text
+}
+
+function addSchemaI18n<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => addSchemaI18n(item)) as T
+  }
+  if (!value || typeof value !== "object") {
+    return value
+  }
+
+  const source = value as Record<string, unknown>
+  const copy: Record<string, unknown> = {}
+  for (const [key, child] of Object.entries(source)) {
+    copy[key] = addSchemaI18n(child)
+  }
+
+  if (typeof source.title === "string") {
+    copy["x-title-i18n"] = {
+      "en-US": source.title,
+      "zh-CN": toZhCn(source.title),
+    }
+  }
+  if (typeof source.description === "string") {
+    copy["x-description-i18n"] = {
+      "en-US": source.description,
+      "zh-CN": toZhCn(source.description),
+    }
+  }
+
+  return copy as T
+}
+
 const studioManifest = {
   studioApiVersion: 1,
   id: "opencode-planpilot",
@@ -81,6 +173,10 @@ const studioManifest = {
     {
       surface: "chat.overlay.bottom",
       title: "Planpilot",
+      titleI18n: {
+        "en-US": "Planpilot",
+        "zh-CN": toZhCn("Planpilot"),
+      },
       entry: studioWebEntry,
       mode: "module",
     },
@@ -89,7 +185,7 @@ const studioManifest = {
   events: {
     pollIntervalMs: 1200,
   },
-  settingsSchema: {
+  settingsSchema: addSchemaI18n({
     type: "object",
     properties: {
       runtime: {
@@ -263,7 +359,7 @@ const studioManifest = {
       },
     },
     additionalProperties: false,
-  },
+  }),
 }
 
 async function writeStudioManifest() {

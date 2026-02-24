@@ -79,6 +79,221 @@ type AppState = {
 const FALLBACK_PLUGIN_ID = "opencode-planpilot"
 const REFRESH_DEBOUNCE_MS = 200
 
+type UiLocale = "en-US" | "zh-CN"
+
+type UiStrings = {
+  unknown: string
+  waitingUntil: (time: string, reason: string) => string
+  stepsDone: (done: number, total: number) => string
+  runtimePaused: string
+  runtimeActive: string
+  none: string
+  runtimeStatus: string
+  state: string
+  activePlan: string
+  nextStep: string
+  refresh: string
+  resume: string
+  pause: string
+  deactivate: string
+  events: string
+  noPlansCreateOne: string
+  activeBadge: string
+  planDetail: string
+  selectPlanHint: string
+  noGoals: string
+  done: string
+  executor: string
+  addGoalPlaceholder: string
+  addGoal: string
+  title: string
+  status: string
+  progress: string
+  goals: string
+  reactivate: string
+  activate: string
+  markPlanDone: string
+  steps: string
+  newStepContentPlaceholder: string
+  optionalGoalsPlaceholder: string
+  addStep: string
+  noStepsYet: string
+  createPlanTree: string
+  planTitlePlaceholder: string
+  planSummaryPlaceholder: string
+  inlineStepsPlaceholder: string
+  createTree: string
+  loading: string
+  sidebarTitle: string
+  planList: string
+  connecting: string
+  live: string
+  reconnecting: string
+  eventError: string
+  invalidActionResponse: (action: string) => string
+  actionFailed: (action: string, detail: string) => string
+  runtimePausedMessage: string
+  runtimeResumedMessage: string
+  planDeactivatedMessage: string
+  planActivatedMessage: (id: number) => string
+  planDoneMessage: (id: number) => string
+  stepDoneMessage: (id: number) => string
+  goalDoneMessage: (id: number) => string
+  planTreeRequiredError: string
+  planTreeCreatedMessage: string
+  stepContentRequiredError: string
+  stepAddedMessage: string
+  goalContentRequiredError: string
+  goalAddedMessage: string
+}
+
+const UI_STRINGS: Record<UiLocale, UiStrings> = {
+  "en-US": {
+    unknown: "unknown",
+    waitingUntil: (time, reason) => `Waiting until ${time}${reason}`,
+    stepsDone: (done, total) => `${done}/${total} steps done`,
+    runtimePaused: "Paused",
+    runtimeActive: "Active",
+    none: "None",
+    runtimeStatus: "Runtime status",
+    state: "State",
+    activePlan: "Active plan",
+    nextStep: "Next step",
+    refresh: "Refresh",
+    resume: "Resume",
+    pause: "Pause",
+    deactivate: "Deactivate",
+    events: "Events",
+    noPlansCreateOne: "No plans yet. Create one below.",
+    activeBadge: "active",
+    planDetail: "Plan detail",
+    selectPlanHint: "Select a plan to inspect details.",
+    noGoals: "No goals",
+    done: "Done",
+    executor: "executor",
+    addGoalPlaceholder: "Add goal",
+    addGoal: "Add goal",
+    title: "Title",
+    status: "Status",
+    progress: "Progress",
+    goals: "Goals",
+    reactivate: "Re-activate",
+    activate: "Activate",
+    markPlanDone: "Mark plan done",
+    steps: "Steps",
+    newStepContentPlaceholder: "New step content",
+    optionalGoalsPlaceholder: "Optional goals, one per line",
+    addStep: "Add step",
+    noStepsYet: "No steps yet.",
+    createPlanTree: "Create plan tree",
+    planTitlePlaceholder: "Plan title",
+    planSummaryPlaceholder: "Plan summary",
+    inlineStepsPlaceholder: "One step per line. Use :: goal A | goal B for inline goals",
+    createTree: "Create tree",
+    loading: "Loading...",
+    sidebarTitle: "Planpilot sidebar",
+    planList: "Plan list",
+    connecting: "connecting",
+    live: "live",
+    reconnecting: "reconnecting",
+    eventError: "Plugin event error",
+    invalidActionResponse: (action) => `Invalid action response for '${action}'`,
+    actionFailed: (action, detail) => `Action '${action}' failed: ${detail}`,
+    runtimePausedMessage: "Runtime paused",
+    runtimeResumedMessage: "Runtime resumed",
+    planDeactivatedMessage: "Plan deactivated",
+    planActivatedMessage: (id) => `Plan ${id} activated`,
+    planDoneMessage: (id) => `Plan ${id} marked done`,
+    stepDoneMessage: (id) => `Step ${id} marked done`,
+    goalDoneMessage: (id) => `Goal ${id} marked done`,
+    planTreeRequiredError: "Plan title, content, and at least one step are required",
+    planTreeCreatedMessage: "Plan tree created",
+    stepContentRequiredError: "Step content is required",
+    stepAddedMessage: "Step added",
+    goalContentRequiredError: "Goal content is required",
+    goalAddedMessage: "Goal added",
+  },
+  "zh-CN": {
+    unknown: "未知",
+    waitingUntil: (time, reason) => `等待至 ${time}${reason}`,
+    stepsDone: (done, total) => `已完成步骤 ${done}/${total}`,
+    runtimePaused: "已暂停",
+    runtimeActive: "运行中",
+    none: "无",
+    runtimeStatus: "运行时状态",
+    state: "状态",
+    activePlan: "当前计划",
+    nextStep: "下一步",
+    refresh: "刷新",
+    resume: "继续",
+    pause: "暂停",
+    deactivate: "取消激活",
+    events: "事件",
+    noPlansCreateOne: "还没有计划。请在下方创建。",
+    activeBadge: "进行中",
+    planDetail: "计划详情",
+    selectPlanHint: "选择一个计划以查看详情。",
+    noGoals: "无目标",
+    done: "完成",
+    executor: "执行者",
+    addGoalPlaceholder: "添加目标",
+    addGoal: "添加目标",
+    title: "标题",
+    status: "状态",
+    progress: "进度",
+    goals: "目标数",
+    reactivate: "重新激活",
+    activate: "激活",
+    markPlanDone: "标记计划完成",
+    steps: "步骤",
+    newStepContentPlaceholder: "新步骤内容",
+    optionalGoalsPlaceholder: "可选目标，每行一个",
+    addStep: "添加步骤",
+    noStepsYet: "暂无步骤。",
+    createPlanTree: "创建计划树",
+    planTitlePlaceholder: "计划标题",
+    planSummaryPlaceholder: "计划摘要",
+    inlineStepsPlaceholder: "每行一个步骤。使用 :: 目标A | 目标B 添加内联目标",
+    createTree: "创建计划树",
+    loading: "加载中...",
+    sidebarTitle: "Planpilot 侧边栏",
+    planList: "计划列表",
+    connecting: "连接中",
+    live: "已连接",
+    reconnecting: "重连中",
+    eventError: "插件事件错误",
+    invalidActionResponse: (action) => `动作 '${action}' 的响应无效`,
+    actionFailed: (action, detail) => `动作 '${action}' 失败: ${detail}`,
+    runtimePausedMessage: "运行时已暂停",
+    runtimeResumedMessage: "运行时已继续",
+    planDeactivatedMessage: "计划已取消激活",
+    planActivatedMessage: (id) => `计划 ${id} 已激活`,
+    planDoneMessage: (id) => `计划 ${id} 已标记完成`,
+    stepDoneMessage: (id) => `步骤 ${id} 已标记完成`,
+    goalDoneMessage: (id) => `目标 ${id} 已标记完成`,
+    planTreeRequiredError: "计划标题、内容以及至少一个步骤为必填项",
+    planTreeCreatedMessage: "计划树已创建",
+    stepContentRequiredError: "步骤内容为必填项",
+    stepAddedMessage: "步骤已添加",
+    goalContentRequiredError: "目标内容为必填项",
+    goalAddedMessage: "目标已添加",
+  },
+}
+
+function normalizeLocale(value: string | null | undefined): UiLocale {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (normalized.startsWith("zh")) return "zh-CN"
+  return "en-US"
+}
+
+function detectLocale(): UiLocale {
+  const params = new URLSearchParams(window.location.search)
+  return normalizeLocale(params.get("locale") || params.get("lang"))
+}
+
+const locale = detectLocale()
+const t = UI_STRINGS[locale]
+
 const state: AppState = {
   pluginId: detectPluginId(),
   context: detectContext(),
@@ -89,7 +304,7 @@ const state: AppState = {
   loading: true,
   busyAction: null,
   message: "",
-  eventStatus: "connecting",
+  eventStatus: t.connecting,
 }
 
 let refreshTimer = 0
@@ -128,6 +343,11 @@ function statusTag(status: PlanStatus | StepStatus | GoalStatus): string {
   return status === "done" ? "done" : "todo"
 }
 
+function statusLabel(status: PlanStatus | StepStatus | GoalStatus): string {
+  if (status === "done") return t.done
+  return locale === "zh-CN" ? "待办" : "todo"
+}
+
 function activePlanId(): number | null {
   return state.runtime?.activePlan?.plan_id ?? null
 }
@@ -140,9 +360,9 @@ function planById(id: number | null): PlanRow | undefined {
 function formatWait(wait: StepDetail["wait"]): string {
   if (!wait || typeof wait.until !== "number") return ""
   const date = new Date(wait.until)
-  const time = Number.isNaN(date.getTime()) ? "unknown" : date.toLocaleString()
+  const time = Number.isNaN(date.getTime()) ? t.unknown : date.toLocaleString(locale)
   const reason = wait.reason ? ` - ${escapeHtml(wait.reason)}` : ""
-  return `Waiting until ${escapeHtml(time)}${reason}`
+  return t.waitingUntil(escapeHtml(time), reason)
 }
 
 function escapeHtml(value: string): string {
@@ -160,7 +380,7 @@ function selectedPlanGoalCount(detail: PlanDetail): number {
 
 function planProgressLabel(detail: PlanDetail): string {
   const doneSteps = detail.steps.filter((step) => step.status === "done").length
-  return `${doneSteps}/${detail.steps.length} steps done`
+  return t.stepsDone(doneSteps, detail.steps.length)
 }
 
 function parseTreeSteps(input: string): Array<{ content: string; executor: "ai" | "human"; goals: string[] }> {
@@ -200,12 +420,12 @@ async function invokeAction<T>(action: string, payload: unknown = null): Promise
   try {
     envelope = (await response.json()) as ActionEnvelope<T>
   } catch {
-    throw new Error(`Invalid action response for '${action}'`)
+    throw new Error(t.invalidActionResponse(action))
   }
 
   if (!response.ok || !envelope.ok) {
     const detail = envelope.error?.message || envelope.error?.code || `HTTP ${response.status}`
-    throw new Error(`Action '${action}' failed: ${detail}`)
+    throw new Error(t.actionFailed(action, detail))
   }
 
   return envelope.data as T
@@ -298,21 +518,21 @@ function bindUiHandlers(root: HTMLElement): void {
   const pauseBtn = root.querySelector<HTMLButtonElement>("[data-action='pause']")
   if (pauseBtn) {
     pauseBtn.addEventListener("click", () => {
-      void runAction("runtime.pause", null, "Runtime paused")
+      void runAction("runtime.pause", null, t.runtimePausedMessage)
     })
   }
 
   const resumeBtn = root.querySelector<HTMLButtonElement>("[data-action='resume']")
   if (resumeBtn) {
     resumeBtn.addEventListener("click", () => {
-      void runAction("runtime.resume", null, "Runtime resumed")
+      void runAction("runtime.resume", null, t.runtimeResumedMessage)
     })
   }
 
   const deactivateBtn = root.querySelector<HTMLButtonElement>("[data-action='deactivate']")
   if (deactivateBtn) {
     deactivateBtn.addEventListener("click", () => {
-      void runAction("plan.deactivate", null, "Plan deactivated")
+      void runAction("plan.deactivate", null, t.planDeactivatedMessage)
     })
   }
 
@@ -320,7 +540,7 @@ function bindUiHandlers(root: HTMLElement): void {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.planActivate)
       if (!Number.isFinite(id)) return
-      void runAction("plan.activate", { id, force: true }, `Plan ${id} activated`)
+      void runAction("plan.activate", { id, force: true }, t.planActivatedMessage(id))
     })
   })
 
@@ -328,7 +548,7 @@ function bindUiHandlers(root: HTMLElement): void {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.planDone)
       if (!Number.isFinite(id)) return
-      void runAction("plan.done", { id }, `Plan ${id} marked done`)
+      void runAction("plan.done", { id }, t.planDoneMessage(id))
     })
   })
 
@@ -336,7 +556,7 @@ function bindUiHandlers(root: HTMLElement): void {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.stepDone)
       if (!Number.isFinite(id)) return
-      void runAction("step.done", { id }, `Step ${id} marked done`)
+      void runAction("step.done", { id }, t.stepDoneMessage(id))
     })
   })
 
@@ -344,7 +564,7 @@ function bindUiHandlers(root: HTMLElement): void {
     button.addEventListener("click", () => {
       const id = Number(button.dataset.goalDone)
       if (!Number.isFinite(id)) return
-      void runAction("goal.done", { id }, `Goal ${id} marked done`)
+      void runAction("goal.done", { id }, t.goalDoneMessage(id))
     })
   })
 
@@ -360,7 +580,7 @@ function bindUiHandlers(root: HTMLElement): void {
       const stepsText = stepsInput?.value ?? ""
       const steps = parseTreeSteps(stepsText)
       if (!title || !content || steps.length === 0) {
-        state.message = "Plan title, content, and at least one step are required"
+        state.message = t.planTreeRequiredError
         render()
         return
       }
@@ -368,7 +588,7 @@ function bindUiHandlers(root: HTMLElement): void {
       void runAction(
         "plan.createTree",
         { title, content, steps },
-        "Plan tree created",
+        t.planTreeCreatedMessage,
       ).then(() => {
         createForm.reset()
       })
@@ -388,11 +608,11 @@ function bindUiHandlers(root: HTMLElement): void {
         .map((goal) => goal.trim())
         .filter((goal) => goal.length > 0)
       if (!Number.isFinite(planId) || !content) {
-        state.message = "Step content is required"
+        state.message = t.stepContentRequiredError
         render()
         return
       }
-      void runAction("step.addTree", { planId, content, executor: "ai", goals }, "Step added").then(() => {
+      void runAction("step.addTree", { planId, content, executor: "ai", goals }, t.stepAddedMessage).then(() => {
         addStepForm.reset()
       })
     })
@@ -405,11 +625,11 @@ function bindUiHandlers(root: HTMLElement): void {
       const contentInput = form.querySelector<HTMLInputElement>("[name='goalContent']")
       const content = contentInput?.value.trim() ?? ""
       if (!Number.isFinite(stepId) || !content) {
-        state.message = "Goal content is required"
+        state.message = t.goalContentRequiredError
         render()
         return
       }
-      void runAction("goal.add", { stepId, content }, "Goal added").then(() => {
+      void runAction("goal.add", { stepId, content }, t.goalAddedMessage).then(() => {
         form.reset()
       })
     })
@@ -418,7 +638,7 @@ function bindUiHandlers(root: HTMLElement): void {
 
 function renderRuntimeCard(): string {
   const runtime = state.runtime
-  const isPaused = runtime?.paused ? "Paused" : "Active"
+  const isPaused = runtime?.paused ? t.runtimePaused : t.runtimeActive
   const activeId = runtime?.activePlan?.plan_id ?? null
   const activePlan = planById(activeId)
   const nextStep = runtime?.nextStep?.step
@@ -427,24 +647,24 @@ function renderRuntimeCard(): string {
 
   return `
     <section class="card">
-      <h2>Runtime status</h2>
-      <div class="runtime-line"><span class="label">State</span><strong>${escapeHtml(isPaused)}</strong></div>
-      <div class="runtime-line"><span class="label">Active plan</span><span>${activePlan ? `#${activePlan.id} ${escapeHtml(activePlan.title)}` : "None"}</span></div>
-      <div class="runtime-line"><span class="label">Next step</span><span>${nextStep ? `#${nextStep.id} ${escapeHtml(nextStep.content)}` : "None"}</span></div>
+      <h2>${t.runtimeStatus}</h2>
+      <div class="runtime-line"><span class="label">${t.state}</span><strong>${escapeHtml(isPaused)}</strong></div>
+      <div class="runtime-line"><span class="label">${t.activePlan}</span><span>${activePlan ? `#${activePlan.id} ${escapeHtml(activePlan.title)}` : t.none}</span></div>
+      <div class="runtime-line"><span class="label">${t.nextStep}</span><span>${nextStep ? `#${nextStep.id} ${escapeHtml(nextStep.content)}` : t.none}</span></div>
       ${waitText ? `<div class="note">${waitText}</div>` : ""}
       <div class="row-actions">
-        <button data-action="refresh" ${actionBusy ? "disabled" : ""}>Refresh</button>
-        ${runtime?.paused ? `<button data-action="resume" ${actionBusy ? "disabled" : ""}>Resume</button>` : `<button data-action="pause" ${actionBusy ? "disabled" : ""}>Pause</button>`}
-        <button data-action="deactivate" ${actionBusy ? "disabled" : ""}>Deactivate</button>
+        <button data-action="refresh" ${actionBusy ? "disabled" : ""}>${t.refresh}</button>
+        ${runtime?.paused ? `<button data-action="resume" ${actionBusy ? "disabled" : ""}>${t.resume}</button>` : `<button data-action="pause" ${actionBusy ? "disabled" : ""}>${t.pause}</button>`}
+        <button data-action="deactivate" ${actionBusy ? "disabled" : ""}>${t.deactivate}</button>
       </div>
-      <div class="small">Events: ${escapeHtml(state.eventStatus)}</div>
+      <div class="small">${t.events}: ${escapeHtml(state.eventStatus)}</div>
     </section>
   `
 }
 
 function renderPlanList(): string {
   if (state.plans.length === 0) {
-    return '<div class="empty">No plans yet. Create one below.</div>'
+    return `<div class="empty">${t.noPlansCreateOne}</div>`
   }
   return state.plans
     .map((plan) => {
@@ -454,8 +674,8 @@ function renderPlanList(): string {
         <button class="plan-item ${isSelected ? "selected" : ""}" data-plan-select="${plan.id}">
           <span class="plan-title">#${plan.id} ${escapeHtml(plan.title)}</span>
           <span class="plan-meta">
-            <span class="pill ${statusTag(plan.status)}">${plan.status}</span>
-            ${isActive ? '<span class="pill active">active</span>' : ""}
+            <span class="pill ${statusTag(plan.status)}">${statusLabel(plan.status)}</span>
+            ${isActive ? `<span class="pill active">${t.activeBadge}</span>` : ""}
           </span>
         </button>
       `
@@ -466,7 +686,7 @@ function renderPlanList(): string {
 function renderPlanDetail(): string {
   const detail = state.selectedPlan
   if (!detail) {
-    return '<section class="card"><h2>Plan detail</h2><div class="empty">Select a plan to inspect details.</div></section>'
+    return `<section class="card"><h2>${t.planDetail}</h2><div class="empty">${t.selectPlanHint}</div></section>`
   }
 
   const stepRows = detail.steps
@@ -478,30 +698,30 @@ function renderPlanDetail(): string {
               (goal) => `
                 <li>
                   <span class="goal-text">#${goal.id} ${escapeHtml(goal.content)}</span>
-                  <span class="pill ${statusTag(goal.status)}">${goal.status}</span>
-                  ${goal.status === "todo" ? `<button data-goal-done="${goal.id}" ${state.busyAction ? "disabled" : ""}>Done</button>` : ""}
+                  <span class="pill ${statusTag(goal.status)}">${statusLabel(goal.status)}</span>
+                  ${goal.status === "todo" ? `<button data-goal-done="${goal.id}" ${state.busyAction ? "disabled" : ""}>${t.done}</button>` : ""}
                 </li>
               `,
             )
             .join("")
-        : '<li class="empty">No goals</li>'
+        : `<li class="empty">${t.noGoals}</li>`
 
       return `
         <article class="step-card">
           <div class="step-head">
             <div>
               <strong>#${step.id}</strong> ${escapeHtml(step.content)}
-              <div class="small">executor: ${escapeHtml(step.executor)}</div>
+              <div class="small">${t.executor}: ${escapeHtml(step.executor)}</div>
             </div>
             <div class="row-actions">
-              <span class="pill ${statusTag(step.status)}">${step.status}</span>
-              ${step.status === "todo" ? `<button data-step-done="${step.id}" ${state.busyAction ? "disabled" : ""}>Done</button>` : ""}
+              <span class="pill ${statusTag(step.status)}">${statusLabel(step.status)}</span>
+              ${step.status === "todo" ? `<button data-step-done="${step.id}" ${state.busyAction ? "disabled" : ""}>${t.done}</button>` : ""}
             </div>
           </div>
           <ul class="goal-list">${goalItems}</ul>
           <form class="inline-form" data-form="add-goal" data-step-id="${step.id}">
-            <input name="goalContent" type="text" placeholder="Add goal" />
-            <button type="submit" ${state.busyAction ? "disabled" : ""}>Add goal</button>
+            <input name="goalContent" type="text" placeholder="${t.addGoalPlaceholder}" />
+            <button type="submit" ${state.busyAction ? "disabled" : ""}>${t.addGoal}</button>
           </form>
         </article>
       `
@@ -511,25 +731,25 @@ function renderPlanDetail(): string {
   const isActive = activePlanId() === detail.plan.id
   return `
     <section class="card">
-      <h2>Plan detail</h2>
-      <div class="runtime-line"><span class="label">Title</span><strong>${escapeHtml(detail.plan.title)}</strong></div>
-      <div class="runtime-line"><span class="label">Status</span><span class="pill ${statusTag(detail.plan.status)}">${detail.plan.status}</span></div>
-      <div class="runtime-line"><span class="label">Progress</span><span>${escapeHtml(planProgressLabel(detail))}</span></div>
-      <div class="runtime-line"><span class="label">Goals</span><span>${selectedPlanGoalCount(detail)}</span></div>
+      <h2>${t.planDetail}</h2>
+      <div class="runtime-line"><span class="label">${t.title}</span><strong>${escapeHtml(detail.plan.title)}</strong></div>
+      <div class="runtime-line"><span class="label">${t.status}</span><span class="pill ${statusTag(detail.plan.status)}">${statusLabel(detail.plan.status)}</span></div>
+      <div class="runtime-line"><span class="label">${t.progress}</span><span>${escapeHtml(planProgressLabel(detail))}</span></div>
+      <div class="runtime-line"><span class="label">${t.goals}</span><span>${selectedPlanGoalCount(detail)}</span></div>
       <p class="content">${escapeHtml(detail.plan.content)}</p>
       <div class="row-actions">
-        <button data-plan-activate="${detail.plan.id}" ${state.busyAction ? "disabled" : ""}>${isActive ? "Re-activate" : "Activate"}</button>
-        <button data-plan-done="${detail.plan.id}" ${state.busyAction ? "disabled" : ""}>Mark plan done</button>
+        <button data-plan-activate="${detail.plan.id}" ${state.busyAction ? "disabled" : ""}>${isActive ? t.reactivate : t.activate}</button>
+        <button data-plan-done="${detail.plan.id}" ${state.busyAction ? "disabled" : ""}>${t.markPlanDone}</button>
       </div>
     </section>
     <section class="card">
-      <h2>Steps</h2>
+      <h2>${t.steps}</h2>
       <form class="stack-form" data-form="add-step" data-plan-id="${detail.plan.id}">
-        <input name="content" type="text" placeholder="New step content" />
-        <textarea name="goals" rows="3" placeholder="Optional goals, one per line"></textarea>
-        <button type="submit" ${state.busyAction ? "disabled" : ""}>Add step</button>
+        <input name="content" type="text" placeholder="${t.newStepContentPlaceholder}" />
+        <textarea name="goals" rows="3" placeholder="${t.optionalGoalsPlaceholder}"></textarea>
+        <button type="submit" ${state.busyAction ? "disabled" : ""}>${t.addStep}</button>
       </form>
-      ${stepRows || '<div class="empty">No steps yet.</div>'}
+      ${stepRows || `<div class="empty">${t.noStepsYet}</div>`}
     </section>
   `
 }
@@ -537,12 +757,12 @@ function renderPlanDetail(): string {
 function renderCreateForm(): string {
   return `
     <section class="card">
-      <h2>Create plan tree</h2>
+      <h2>${t.createPlanTree}</h2>
       <form class="stack-form" data-form="create-plan-tree">
-        <input name="title" type="text" placeholder="Plan title" />
-        <textarea name="content" rows="3" placeholder="Plan summary"></textarea>
-        <textarea name="steps" rows="4" placeholder="One step per line. Use :: goal A | goal B for inline goals"></textarea>
-        <button type="submit" ${state.busyAction ? "disabled" : ""}>Create tree</button>
+        <input name="title" type="text" placeholder="${t.planTitlePlaceholder}" />
+        <textarea name="content" rows="3" placeholder="${t.planSummaryPlaceholder}"></textarea>
+        <textarea name="steps" rows="4" placeholder="${t.inlineStepsPlaceholder}"></textarea>
+        <button type="submit" ${state.busyAction ? "disabled" : ""}>${t.createTree}</button>
       </form>
     </section>
   `
@@ -735,20 +955,20 @@ function render(): void {
   const root = document.getElementById("app")
   if (!root) return
 
-  const loadingText = state.loading ? '<div class="small">Loading...</div>' : ""
+  const loadingText = state.loading ? `<div class="small">${t.loading}</div>` : ""
   const messageText = state.message ? `<div class="message">${escapeHtml(state.message)}</div>` : ""
 
   root.innerHTML = `
     ${renderStyles()}
     <section>
       <div class="card">
-        <h1>Planpilot sidebar</h1>
+        <h1>${t.sidebarTitle}</h1>
         ${loadingText}
         ${messageText}
       </div>
       ${renderRuntimeCard()}
       <section class="card">
-        <h2>Plan list</h2>
+        <h2>${t.planList}</h2>
         ${renderPlanList()}
       </section>
       ${renderCreateForm()}
@@ -765,13 +985,13 @@ function subscribeEvents(): () => void {
   const source = new EventSource(`/api/plugins/${encodeURIComponent(state.pluginId)}/events`)
 
   const onChange = () => {
-    state.eventStatus = "live"
+    state.eventStatus = t.live
     scheduleRefresh()
     render()
   }
 
   source.onopen = () => {
-    state.eventStatus = "live"
+    state.eventStatus = t.live
     render()
   }
 
@@ -779,19 +999,19 @@ function subscribeEvents(): () => void {
   source.addEventListener("planpilot.runtime.changed", onChange)
   source.onmessage = onChange
   source.addEventListener("heartbeat", () => {
-    state.eventStatus = "live"
+    state.eventStatus = t.live
     render()
   })
 
   source.addEventListener("plugin.error", (event) => {
-    const data = event instanceof MessageEvent ? String(event.data || "") : "Plugin event error"
+    const data = event instanceof MessageEvent ? String(event.data || "") : t.eventError
     state.message = data.length > 300 ? `${data.slice(0, 300)}...` : data
-    state.eventStatus = "error"
+    state.eventStatus = t.eventError
     render()
   })
 
   source.onerror = () => {
-    state.eventStatus = "reconnecting"
+    state.eventStatus = t.reconnecting
     render()
   }
 
